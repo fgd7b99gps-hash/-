@@ -62,8 +62,6 @@
       background-color: var(--card-bg); border-radius: 8px; padding: 12px; margin-bottom: 12px;
       box-shadow: var(--shadow); border: 1px solid var(--border-color);
     }
-    .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 12px; }
-    .card-thumb { width: 100%; aspect-ratio: 3/4; object-fit: cover; border-radius: 6px; background-color: var(--border-color); }
     input, textarea, select {
       width: 100%; padding: 8px 12px; margin-top: 4px; margin-bottom: 12px;
       border: 1px solid var(--border-color); border-radius: 6px; background-color: var(--input-bg); color: var(--text-color); font-size: 14px;
@@ -77,14 +75,15 @@
       background-color: var(--card-bg); width: 100%; max-width: 500px; border-radius: 12px;
       padding: 20px; max-height: 90vh; overflow-y: auto; box-shadow: var(--shadow);
     }
-    .seq-card-list { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
-    .seq-card-row { display: flex; align-items: center; gap: 8px; background: var(--accent-bg); padding: 6px 10px; border-radius: 6px; }
-    .badge { background-color: var(--primary); color: white; font-size: 11px; padding: 2px 6px; border-radius: 4px; }
+    .seq-card-list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+    .seq-card-row { display: flex; align-items: center; gap: 8px; background: var(--accent-bg); padding: 8px 12px; border-radius: 6px; font-size: 13px; }
+    .badge { background-color: var(--primary); color: white; font-size: 11px; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
     .toast {
       position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
       background: rgba(0,0,0,0.8); color: white; padding: 10px 20px; border-radius: 20px;
       font-size: 13px; z-index: 1000; display: none;
     }
+    .ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   </style>
 </head>
 <body data-theme="light">
@@ -104,7 +103,7 @@
   <div class="container">
     <div id="sequenceTab" class="tab-content active">
       <div class="search-box">
-        <input type="text" id="seqSearchInput" placeholder="店舗名、筐体、カード名で検索..." oninput="renderSequences()">
+        <input type="text" id="seqSearchInput" placeholder="カード名や番号で検索..." oninput="renderSequences()">
       </div>
       <button class="btn btn-block" onclick="openSequenceModal()">＋ 新しい配列を登録</button>
       <div id="sequenceList" style="margin-top: 16px;"></div>
@@ -115,7 +114,7 @@
         <input type="text" id="cardSearchInput" placeholder="カード名や番号で検索..." oninput="renderCards()">
       </div>
       <button class="btn btn-block" onclick="openCardModal()">＋ 新しいカードを登録</button>
-      <div id="cardList" class="card-grid" style="margin-top: 16px;"></div>
+      <div id="cardList" style="margin-top: 16px; display: flex; flex-direction: column; gap: 8px;"></div>
     </div>
   </div>
   <div id="cardModal" class="modal">
@@ -127,9 +126,6 @@
         <input type="text" id="cardNumberInput" required placeholder="01-01">
         <label style="font-size: 12px;">カード名</label>
         <input type="text" id="cardNameInput" required placeholder="スターフェスティバルコーデ">
-        <label style="font-size: 12px;">画像 (任意)</label>
-        <input type="file" accept="image/*" onchange="handleImageUpload(event)">
-        <div id="cardPhotoPreview"></div>
         <div style="display: flex; gap: 8px; margin-top: 16px;">
           <button type="button" class="btn btn-secondary" style="flex:1;" onclick="closeModal('cardModal')">キャンセル</button>
           <button type="submit" class="btn" style="flex:1;">保存</button>
@@ -147,17 +143,12 @@
       <button type="button" class="btn btn-secondary btn-block" style="margin-top: 16px;" onclick="closeModal('cardDetailModal')">閉じる</button>
     </div>
   </div>
+
   <div id="sequenceModal" class="modal">
     <div class="modal-content">
       <h3 id="seqModalTitle" style="margin-bottom: 12px; color: var(--primary);">配列登録</h3>
       <form id="seqForm" onsubmit="saveSequence(event)">
         <input type="hidden" id="seqId">
-        <label style="font-size: 12px;">店舗名</label>
-        <input type="text" id="seqShop" placeholder="例: GiGO 渋谷">
-        <label style="font-size: 12px;">筐体・バージョン等</label>
-        <input type="text" id="seqMachine" placeholder="例: 筐体A / 2弾">
-        <label style="font-size: 12px;">日付</label>
-        <input type="date" id="seqDate">
         <label style="font-size: 12px;">メモ (任意)</label>
         <textarea id="seqMemo" rows="2" placeholder="初日朝イチの状況など..."></textarea>
         <h4 style="font-size: 13px; margin: 12px 0 6px 0; border-bottom: 1px solid var(--border-color); padding-bottom: 4px;">排出パターン</h4>
@@ -195,10 +186,8 @@
   </div>
 
   <div id="toast" class="toast">共有URLをコピーしました！</div>
-
   <script>
     let db = { cards: [], sequences: [] };
-    let assets = {};
 
     function initData() {
       const params = new URLSearchParams(window.location.search);
@@ -214,18 +203,15 @@
         }
       } else {
         db = JSON.parse(localStorage.getItem('aikatsu_db')) || { cards: [], sequences: [] };
-        assets = JSON.parse(localStorage.getItem('aikatsu_assets')) || {};
       }
     }
 
     initData();
 
-    let tempImageBase64 = null;
     let activePatternIndexForSelect = null;
 
     function saveData() {
       localStorage.setItem('aikatsu_db', JSON.stringify(db));
-      localStorage.setItem('aikatsu_assets', JSON.stringify(assets));
     }
 
     function shareDataUrl() {
@@ -239,7 +225,8 @@
         prompt("以下のURLをコピーしてください", shareUrl);
       }
     }
-        function showToast() {
+
+    function showToast() {
       const t = id('toast');
       t.style.display = 'block';
       setTimeout(() => { t.style.display = 'none'; }, 2000);
@@ -282,45 +269,13 @@
 
     function closeConfirmModal() { id('confirmModal').style.display = 'none'; }
     function closeModal(modalId) { id(modalId).style.display = 'none'; }
-
-    function handleImageUpload(e) {
-      const file = e.target.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = function(evt) {
-        const img = new Image();
-        img.onload = function() {
-          const canvas = document.createElement('canvas');
-          let width = img.width, height = img.height;
-          const maxDim = 900;
-          if (width > height && width > maxDim) {
-            height = Math.round((height * maxDim) / width); width = maxDim;
-          } else if (height > maxDim) {
-            width = Math.round((width * maxDim) / height); height = maxDim;
-          }
-          canvas.width = width; canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0, width, height);
-          tempImageBase64 = canvas.toDataURL('image/jpeg', 0.8);
-          id('cardPhotoPreview').innerHTML = `<img src="${tempImageBase64}" style="max-height:100px; border-radius:6px; margin-top:8px;">`;
-        };
-        img.src = evt.target.result;
-      };
-      reader.readAsDataURL(file);
-    }
-
     function openCardModal(card = null) {
-      tempImageBase64 = null;
       id('cardForm').reset();
-      id('cardPhotoPreview').innerHTML = '';
       if (card) {
         id('cardModalTitle').textContent = 'カード編集';
         id('cardId').value = card.id;
         id('cardNumberInput').value = card.number;
         id('cardNameInput').value = card.name;
-        if (assets[card.id]) {
-          id('cardPhotoPreview').innerHTML = `<img src="${assets[card.id]}" style="max-height:100px; border-radius:6px; margin-top:8px;">`;
-        }
       } else {
         id('cardModalTitle').textContent = 'カード登録';
         id('cardId').value = '';
@@ -333,7 +288,6 @@
       const cardId = id('cardId').value || 'card_' + Date.now();
       const number = id('cardNumberInput').value.trim();
       const name = id('cardNameInput').value.trim();
-      if (tempImageBase64) { assets[cardId] = tempImageBase64; }
 
       const existingIndex = db.cards.findIndex(c => c.id === cardId);
       const cardData = { id: cardId, number, name };
@@ -344,10 +298,10 @@
       renderCards();
       if (activePatternIndexForSelect !== null) renderSelectCardList();
     }
+
     function deleteCard(cardId) {
       showConfirm('カード削除', 'このカードを削除しますか？', () => {
         db.cards = db.cards.filter(c => c.id !== cardId);
-        delete assets[cardId];
         db.sequences.forEach(seq => {
           seq.patterns.forEach(pat => { pat.cardIds = pat.cardIds.filter(id => id !== cardId); });
         });
@@ -363,15 +317,17 @@
       const filtered = db.cards.filter(c => normalizeText(c.name).includes(query) || normalizeText(c.number).includes(query));
 
       filtered.forEach(c => {
-        const imgSrc = assets[c.id] || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="133" viewBox="0 0 100 133"><rect width="100%" height="100%" fill="%23ccc"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="%23666">No Image</text></svg>';
         const div = document.createElement('div');
         div.className = 'card-item';
-        div.style.textAlign = 'center';
+        div.style.display = 'flex';
+        div.style.justifyContent = 'space-between';
+        div.style.alignItems: 'center';
         div.innerHTML = `
-          <img src="${imgSrc}" class="card-thumb" onclick="openCardDetail('${c.id}')" style="cursor:pointer">
-          <div style="font-weight:bold; font-size:12px; margin-top:6px;">${c.number}</div>
-          <div style="font-size:13px; margin-bottom:8px;" class="ellipsis">${c.name}</div>
-          <div style="display:flex; gap:4px; justify-content:center;">
+          <div onclick="openCardDetail('${c.id}')" style="cursor:pointer; flex:1; overflow:hidden; padding-right:8px;">
+            <div style="font-weight:bold; font-size:12px; color:var(--primary);">${c.number}</div>
+            <div style="font-size:13px;" class="ellipsis">${c.name}</div>
+          </div>
+          <div style="display:flex; gap:4px; flex-shrink:0;">
             <button class="btn btn-sm" onclick='openCardModal(${JSON.stringify(c)})'>編集</button>
             <button class="btn btn-sm btn-danger" onclick="deleteCard('${c.id}')">削除</button>
           </div>
@@ -384,18 +340,14 @@
       const card = db.cards.find(c => c.id === cardId);
       if (!card) return;
       id('detailCardName').textContent = card.name;
-      const imgSrc = assets[card.id] || '';
-      id('detailCardInfo').innerHTML = `
-        ${imgSrc ? `<img src="${imgSrc}" style="width:100px; border-radius:6px; display:block; margin:0 auto 8px;">` : ''}
-        <div><strong>カード番号:</strong> ${card.number}</div>
-      `;
+      id('detailCardInfo').innerHTML = `<div><strong>カード番号:</strong> ${card.number}</div>`;
 
       const history = [];
       db.sequences.forEach(seq => {
         seq.patterns.forEach(pat => {
           pat.cardIds.forEach((cId, idx) => {
             if (cId === cardId) {
-              history.push({ shop: seq.shop || '未設定店舗', machine: seq.machine || '未設定筐体', date: seq.date || '日付不明', patternName: pat.name, order: idx + 1 });
+              history.push({ patternName: pat.name, order: idx + 1, memo: seq.memo });
             }
           });
         });
@@ -409,13 +361,12 @@
         history.forEach(h => {
           const div = document.createElement('div');
           div.style.fontSize = '12px'; div.style.padding = '6px'; div.style.borderBottom = '1px solid var(--border-color)';
-          div.innerHTML = `<strong>${h.shop} (${h.machine})</strong> - ${h.date}<br>${h.patternName} の <strong>${h.order}枚目</strong>に排出`;
+          div.innerHTML = `${h.patternName} の <strong>${h.order}枚目</strong>に排出 ${h.memo ? `<br><span style="color:var(--text-sub);">${h.memo}</span>` : ''}`;
           histList.appendChild(div);
         });
       }
       id('cardDetailModal').style.display = 'flex';
     }
-
     let tempPatterns = [];
 
     function openSequenceModal(seq = null) {
@@ -423,15 +374,11 @@
       if (seq) {
         id('seqModalTitle').textContent = '配列編集';
         id('seqId').value = seq.id;
-        id('seqShop').value = seq.shop;
-        id('seqMachine').value = seq.machine;
-        id('seqDate').value = seq.date;
         id('seqMemo').value = seq.memo;
         tempPatterns = JSON.parse(JSON.stringify(seq.patterns));
       } else {
         id('seqModalTitle').textContent = '配列登録';
         id('seqId').value = '';
-        id('seqDate').value = new Date().toISOString().split('T')[0];
         tempPatterns = [ { name: '1通り目', cardIds: [] } ];
       }
       renderTempPatterns();
@@ -457,7 +404,7 @@
           return `
             <div class="seq-card-row">
               <span class="badge">${cIdx + 1}</span>
-              <span style="flex:1; font-size:12px;" class="ellipsis">${name}</span>
+              <span style="flex:1;" class="ellipsis">${name}</span>
               <button type="button" class="btn btn-sm btn-secondary" onclick="moveSeqCard(${pIdx}, ${cIdx}, -1)">↑</button>
               <button type="button" class="btn btn-sm btn-secondary" onclick="moveSeqCard(${pIdx}, ${cIdx}, 1)">↓</button>
               <button type="button" class="btn btn-sm btn-danger" onclick="removeSeqCard(${pIdx}, ${cIdx})">×</button>
@@ -515,8 +462,8 @@
           }
         };
         div.innerHTML = `
-          <div style="font-weight:bold; font-size:12px;">${c.number}</div>
-          <div style="font-size:12px;" class="ellipsis">${c.name}</div>
+          <div style="font-weight:bold;">${c.number}</div>
+          <div style="flex:1;" class="ellipsis">${c.name}</div>
         `;
         container.appendChild(div);
       });
@@ -525,12 +472,9 @@
     function saveSequence(e) {
       e.preventDefault();
       const seqId = id('seqId').value || 'seq_' + Date.now();
-      const shop = id('seqShop').value.trim();
-      const machine = id('seqMachine').value.trim();
-      const date = id('seqDate').value;
       const memo = id('seqMemo').value.trim();
 
-      const seqData = { id: seqId, shop, machine, date, memo, patterns: tempPatterns };
+      const seqData = { id: seqId, memo, patterns: tempPatterns };
       const existingIndex = db.sequences.findIndex(s => s.id === seqId);
       if (existingIndex >= 0) { db.sequences[existingIndex] = seqData; } else { db.sequences.push(seqData); }
 
@@ -546,14 +490,13 @@
         renderSequences();
       });
     }
-
     function renderSequences() {
       const query = normalizeText(id('seqSearchInput').value);
       const list = id('sequenceList');
       list.innerHTML = '';
 
       const filtered = db.sequences.filter(seq => {
-        if (normalizeText(seq.shop).includes(query) || normalizeText(seq.machine).includes(query)) return true;
+        if (normalizeText(seq.memo).includes(query)) return true;
         return seq.patterns.some(pat => 
           pat.cardIds.some(cId => {
             const card = db.cards.find(c => c.id === cId);
@@ -567,24 +510,24 @@
         div.className = 'sequence-item';
 
         let patternsHtml = seq.patterns.map(pat => {
-          let cardChips = pat.cardIds.map((cId, idx) => {
+          let cardRows = pat.cardIds.map((cId, idx) => {
             const card = db.cards.find(c => c.id === cId);
             const num = card ? card.number : '?';
-            const thumb = (card && assets[card.id]) ? assets[card.id] : '';
+            const name = card ? card.name : '不明なカード';
             return `
-              <div style="flex: 0 0 60px; text-align: center; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 6px; padding: 4px;">
-                ${thumb ? `<img src="${thumb}" style="width: 45px; height: 60px; object-fit: cover; border-radius: 4px; display: block; margin: 0 auto 2px;">` : `<div style="width: 45px; height: 60px; background: var(--border-color); border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 9px; color: var(--text-sub); margin: 0 auto 2px;">NoImg</div>`}
-                <div style="font-size: 10px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${idx + 1}.</div>
-                <div style="font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${num}</div>
+              <div style="display: flex; align-items: center; gap: 8px; padding: 4px 0; border-bottom: 1px dashed var(--border-color); font-size: 13px;">
+                <span style="font-size: 11px; color: var(--text-sub); width: 24px; text-align: right;">${idx + 1}.</span>
+                <span style="font-weight: bold; color: var(--primary); min-width: 45px;">${num}</span>
+                <span style="flex: 1;" class="ellipsis">${name}</span>
               </div>
             `;
           }).join('');
 
           return `
-            <div style="margin-top: 8px; background: var(--accent-bg); padding: 8px; border-radius: 6px;">
-              <strong style="font-size: 12px; display: block; margin-bottom: 4px;">${pat.name}</strong>
-              <div style="display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px;">
-                ${cardChips || '<div style="font-size: 11px; color: var(--text-sub);">カードなし</div>'}
+            <div style="margin-top: 8px; background: var(--accent-bg); padding: 10px; border-radius: 6px;">
+              <strong style="font-size: 12px; display: block; margin-bottom: 6px; color: var(--primary);">${pat.name}</strong>
+              <div style="display: flex; flex-direction: column;">
+                ${cardRows || '<div style="font-size: 11px; color: var(--text-sub);">カードなし</div>'}
               </div>
             </div>
           `;
@@ -593,9 +536,7 @@
         div.innerHTML = `
           <div style="display:flex; justify-content:space-between; align-items:flex-start;">
             <div>
-              <strong style="font-size:15px;">${seq.shop || '店舗未設定'}</strong> 
-              <span style="font-size:12px; color:var(--text-sub);">(${seq.machine || '筐体未設定'})</span>
-              <div style="font-size:11px; color:var(--text-sub);">${seq.date}</div>
+              <strong style="font-size:14px;">排出配列メモ</strong>
             </div>
             <div>
               <button class="btn btn-sm" onclick='openSequenceModal(${JSON.stringify(seq)})'>編集</button>
