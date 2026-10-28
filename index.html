@@ -239,7 +239,7 @@
         prompt("以下のURLをコピーしてください", shareUrl);
       }
     }
-    function showToast() {
+        function showToast() {
       const t = id('toast');
       t.style.display = 'block';
       setTimeout(() => { t.style.display = 'none'; }, 2000);
@@ -521,6 +521,7 @@
         container.appendChild(div);
       });
     }
+
     function saveSequence(e) {
       e.preventDefault();
       const seqId = id('seqId').value || 'seq_' + Date.now();
