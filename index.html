@@ -20,6 +20,8 @@ nav button.on{color:var(--pri);border-bottom-color:var(--pri)}
 .tab{display:none}.tab.on{display:block}
 input,textarea{width:100%;padding:9px 11px;border:1px solid var(--bd);border-radius:8px;background:var(--card);color:var(--text);font-size:15px}
 textarea{resize:vertical}
+#smemo{font-size:17px;font-weight:bold}
+.memo-t{font-size:16px;font-weight:bold}
 .btn{background:var(--pri);color:#fff;border:none;padding:8px 14px;border-radius:8px;font-weight:bold;font-size:13px;cursor:pointer}
 .g{background:#757575}.r{background:#f44336}.sm{padding:4px 9px;font-size:12px}
 .row{display:flex;gap:6px;align-items:center}
@@ -103,14 +105,18 @@ textarea{resize:vertical}
 </div></div>
 <div class="toast" id="toast"></div>
 <script>
-let db={cards:[],seqs:[],marks:{}}; // cards:[{n,name}] seqs:[{id,memo,pats:[{name,nums:[]}]}] marks:{"配列ID:パターン番号:位置":カード番号}
+let db={cards:[],seqs:[],marks:{}}; // cards:[{n,name}] seqs:[{id,memo,pats:[{name,nums:[],total}]}] marks:{"配列ID:パターン番号:位置":カード番号}
 let editPats=[],tt=null;
 const $=i=>document.getElementById(i);
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 const norm=s=>String(s||'').normalize('NFKC').trim().toUpperCase();
 const toks=s=>norm(s).split(/[\s,、]+/).filter(Boolean);
 const nameOf=n=>{const c=db.cards.find(c=>c.n===n);return c?c.name:''};
-const INFO='番号をスペース区切りで順に入れると、一致する配列と「次のカード」が出ます。01だけでE1-01もヒット。番号のあとにスペースで確定。カードを長押しで、その場所だけ紫枠。';
+const INFO='番号をスペース区切りで順に入れると、一致する配列と「次のカード」が出ます。01だけでE1-01もヒット。番号のあとにスペースで確定。カードを長押しで、その場所だけ紫枠（共有URLにも入ります）。';
+
+// ---- 枚数表記（7/100枚） ----
+function totalOf(p){const t=parseInt(p.total,10);return t>0?t:100}
+function cnt(p){return p.nums.length+'/'+totalOf(p)+'枚'}
 
 // ---- 広い検索（E1-01 を 01 や 1 でもヒット） ----
 const SUF=/(PR|[\u2B50\u2605\u2606]\uFE0F?)+$/u;
@@ -165,10 +171,19 @@ const pipe=async(b,t)=>new Uint8Array(await new Response(new Blob([b]).stream().
 async function pack(str){const r=new TextEncoder().encode(str);return window.CompressionStream?'z'+b64(await pipe(r,new CompressionStream('deflate-raw'))):'j'+b64(r)}
 async function unpack(s){const b=unb64(s.slice(1));return new TextDecoder().decode(s[0]==='z'?await pipe(b,new DecompressionStream('deflate-raw')):b)}
 
+// ---- 共有（紫枠の位置・総枚数も入れる） ----
 async function share(){
   try{
     const names={};db.cards.forEach(c=>{if(c.name)names[c.n]=c.name});
-    const data={v:4,c:Object.entries(names),s:db.seqs.map(s=>[s.memo,s.pats.map(p=>[p.name,p.nums.join(' ')])])};
+    const data={v:4,c:Object.entries(names),s:db.seqs.map(s=>[s.memo,s.pats.map((p,pi)=>{
+      const ms=[];
+      p.nums.forEach((n,i)=>{if(db.marks[s.id+':'+pi+':'+i]===n)ms.push(i)});
+      const tot=totalOf(p);
+      const r=[p.name,p.nums.join(' ')];
+      if(ms.length||tot!==100)r.push(ms);
+      if(tot!==100)r.push(tot);
+      return r;
+    })])};
     const url=location.href.split(/[?#]/)[0]+'?s='+await pack(JSON.stringify(data));
     if(navigator.clipboard&&navigator.clipboard.writeText){await navigator.clipboard.writeText(url);toast('URLをコピー（'+url.length+'文字）')}
     else prompt('コピーしてください',url);
@@ -182,12 +197,20 @@ async function initShared(){
   try{
     const o=JSON.parse(await unpack(s));
     if(o.v!==4){toast('古い形式の共有URLです');return}
-    const cards=[],seen={};
+    const cards=[],seen={},marks={};
     const add=(n,name)=>{n=norm(n);if(!n)return;if(!seen[n]){seen[n]=1;cards.push({n,name:name||''})}else if(name){cards.find(c=>c.n===n).name=name}};
     (o.c||[]).forEach(r=>add(r[0],String(r[1]||'')));
-    const seqs=(o.s||[]).map((r,i)=>({id:'s'+Date.now()+i,memo:String(r[0]||''),pats:(r[1]||[]).map(p=>({name:String(p[0]||''),nums:toks(p[1]||'')}))}));
+    const seqs=(o.s||[]).map((r,i)=>{
+      const id='s'+Date.now()+i;
+      return{id,memo:String(r[0]||''),pats:(r[1]||[]).map((p,pi)=>{
+        const nums=toks(p[1]||'');
+        (Array.isArray(p[2])?p[2]:[]).forEach(x=>{if(Number.isInteger(x)&&nums[x])marks[id+':'+pi+':'+x]=nums[x]});
+        const tot=parseInt(p[3],10);
+        return{name:String(p[0]||''),nums,total:(tot>0&&tot<=9999)?tot:100};
+      })};
+    });
     seqs.forEach(s=>s.pats.forEach(p=>p.nums.forEach(n=>add(n,''))));
-    const ok=()=>{db={cards,seqs,marks:{}};save();renderSeq();renderCards();toast('共有データを読み込みました')};
+    const ok=()=>{db={cards,seqs,marks};save();renderSeq();renderCards();toast('共有データを読み込みました')};
     if(db.cards.length||db.seqs.length){ask('この端末のデータが共有データで置き換わります。よろしいですか？',ok,'読み込む')}else ok();
   }catch(e){toast('共有データの読み込みに失敗しました')}
 }
@@ -224,7 +247,7 @@ function renderSeq(){
     s.pats.forEach((p,pi)=>{
       const K=x=>s.id+':'+pi+':'+x;
       if(!t.length){
-        ph+=`<div class="pat"><b>${esc(p.name)}</b>（${p.nums.length}枚）<div style="background:var(--card);border-radius:6px;margin-top:4px">${p.nums.map((n,i)=>row(i,n,'','',K(i))).join('')||'<div class="dots">カードなし</div>'}</div></div>`;
+        ph+=`<div class="pat"><b>${esc(p.name)}</b>（${cnt(p)}）<div style="background:var(--card);border-radius:6px;margin-top:4px">${p.nums.map((n,i)=>row(i,n,'','',K(i))).join('')||'<div class="dots">カードなし</div>'}</div></div>`;
         return;
       }
       const pos=findPos(p.nums,t,exLast);
@@ -238,10 +261,10 @@ function renderSeq(){
         }
         if(to<p.nums.length)r+='<div class="dots">⋮</div>';
         const nx=p.nums[end];
-        ph+=`<div class="pat"><b>${esc(p.name)}</b>（${end}枚目まで一致 / 全${p.nums.length}枚）<div style="background:var(--card);border-radius:6px;margin-top:4px">${r}</div>${nx?`<button class="btn sm" style="margin-top:6px" onclick="addToQ('${esc(nx)}')">次が出た：${esc(nx)} を追加</button>`:'<div class="info">この配列はここで終わりです</div>'}</div>`;
+        ph+=`<div class="pat"><b>${esc(p.name)}</b>（${end}枚目まで一致 / ${cnt(p)}）<div style="background:var(--card);border-radius:6px;margin-top:4px">${r}</div>${nx?`<button class="btn sm" style="margin-top:6px" onclick="addToQ('${esc(nx)}')">次が出た：${esc(nx)} を追加</button>`:'<div class="info">この配列はここで終わりです</div>'}</div>`;
       });
     });
-    if(ph)h+=`<div class="box"><div class="row" style="justify-content:space-between"><strong style="font-size:13px">${esc(s.memo)||'排出配列メモ'}</strong><span style="white-space:nowrap"><button class="btn sm" onclick="openSeq('${s.id}')">編集</button> <button class="btn sm r" onclick="delSeq('${s.id}')">削除</button></span></div>${ph}</div>`;
+    if(ph)h+=`<div class="box"><div class="row" style="justify-content:space-between"><strong class="memo-t">${esc(s.memo)||'排出配列メモ'}</strong><span style="white-space:nowrap"><button class="btn sm" onclick="openSeq('${s.id}')">編集</button> <button class="btn sm r" onclick="delSeq('${s.id}')">削除</button></span></div>${ph}</div>`;
   });
   box.innerHTML=h||(t.length?'<div class="info" style="text-align:center;margin-top:16px">一致する配列はありません</div>':'<div class="info" style="text-align:center;margin-top:16px">配列が未登録です</div>');
   $('qinfo').textContent=t.length?`入力 ${t.length}枚 → 一致 ${hits}件`:INFO;
@@ -317,16 +340,16 @@ function bulkAdd(){
 function openSeq(sid){
   const s=sid&&db.seqs.find(x=>x.id===sid);
   $('sid').value=s?s.id:'';$('smemo').value=s?s.memo:'';
-  editPats=s?s.pats.map(p=>({name:p.name,txt:p.nums.join(' ')})):[{name:'1通り目',txt:''}];
+  editPats=s?s.pats.map(p=>({name:p.name,txt:p.nums.join(' '),total:totalOf(p)})):[{name:'1通り目',txt:'',total:100}];
   drawPats();$('sm').style.display='flex';
 }
 function closeSeq(){$('sm').style.display='none'}
 function drawPats(){
-  $('pats').innerHTML=editPats.map((p,i)=>`<div class="box" style="margin-top:8px"><div class="row" style="margin-bottom:6px"><input value="${esc(p.name)}" oninput="editPats[${i}].name=this.value"><button class="btn sm r" onclick="editPats.splice(${i},1);drawPats()">削除</button></div><textarea rows="4" placeholder="E1-01 E1-02PR E1-03 ..." oninput="editPats[${i}].txt=this.value">${esc(p.txt)}</textarea></div>`).join('');
+  $('pats').innerHTML=editPats.map((p,i)=>`<div class="box" style="margin-top:8px"><div class="row" style="margin-bottom:6px"><input value="${esc(p.name)}" oninput="editPats[${i}].name=this.value"><button class="btn sm r" onclick="editPats.splice(${i},1);drawPats()">削除</button></div><div class="row" style="margin-bottom:6px"><span style="font-size:12px;color:var(--sub);white-space:nowrap">総枚数</span><input type="number" inputmode="numeric" min="1" max="9999" value="${esc(p.total)}" oninput="editPats[${i}].total=this.value" style="width:90px"><span style="font-size:12px;color:var(--sub)">枚（7/100枚の分母）</span></div><textarea rows="4" placeholder="E1-01 E1-02PR E1-03 ..." oninput="editPats[${i}].txt=this.value">${esc(p.txt)}</textarea></div>`).join('');
 }
-function addPat(){editPats.push({name:(editPats.length+1)+'通り目',txt:''});drawPats()}
+function addPat(){editPats.push({name:(editPats.length+1)+'通り目',txt:'',total:100});drawPats()}
 function saveSeq(){
-  const pats=editPats.map(p=>({name:p.name.trim()||'無題',nums:toks(p.txt)}));
+  const pats=editPats.map(p=>({name:p.name.trim()||'無題',nums:toks(p.txt),total:Math.min(9999,Math.max(1,parseInt(p.total,10)||100))}));
   pats.forEach(p=>p.nums.forEach(n=>{if(!db.cards.find(c=>c.n===n))db.cards.push({n,name:''})}));
   const sid=$('sid').value||'s'+Date.now();
   const d={id:sid,memo:$('smemo').value.trim(),pats};
