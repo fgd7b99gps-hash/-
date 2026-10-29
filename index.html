@@ -117,6 +117,7 @@
       <div id="cardList" style="margin-top: 16px; display: flex; flex-direction: column; gap: 8px;"></div>
     </div>
   </div>
+
   <div id="cardModal" class="modal">
     <div class="modal-content">
       <h3 id="cardModalTitle" style="margin-bottom: 12px; color: var(--primary);">カード登録</h3>
@@ -186,6 +187,7 @@
   </div>
 
   <div id="toast" class="toast">共有URLをコピーしました！</div>
+
   <script>
     let db = { cards: [], sequences: [] };
 
@@ -269,6 +271,7 @@
 
     function closeConfirmModal() { id('confirmModal').style.display = 'none'; }
     function closeModal(modalId) { id(modalId).style.display = 'none'; }
+
     function openCardModal(card = null) {
       id('cardForm').reset();
       if (card) {
@@ -321,14 +324,14 @@
         div.className = 'card-item';
         div.style.display = 'flex';
         div.style.justifyContent = 'space-between';
-        div.style.alignItems: 'center';
+        div.style.alignItems = 'center';
         div.innerHTML = `
           <div onclick="openCardDetail('${c.id}')" style="cursor:pointer; flex:1; overflow:hidden; padding-right:8px;">
             <div style="font-weight:bold; font-size:12px; color:var(--primary);">${c.number}</div>
             <div style="font-size:13px;" class="ellipsis">${c.name}</div>
           </div>
           <div style="display:flex; gap:4px; flex-shrink:0;">
-            <button class="btn btn-sm" onclick='openCardModal(${JSON.stringify(c)})'>編集</button>
+            <button class="btn btn-sm" onclick='openCardModal(${JSON.stringify(c).replace(/'/g, "&#39;")})'>編集</button>
             <button class="btn btn-sm btn-danger" onclick="deleteCard('${c.id}')">削除</button>
           </div>
         `;
@@ -365,8 +368,9 @@
           histList.appendChild(div);
         });
       }
-      id('cardDetailModal').style.display = 'flex';
+      id('detailCardModal').style.display = 'flex';
     }
+
     let tempPatterns = [];
 
     function openSequenceModal(seq = null) {
@@ -374,7 +378,7 @@
       if (seq) {
         id('seqModalTitle').textContent = '配列編集';
         id('seqId').value = seq.id;
-        id('seqMemo').value = seq.memo;
+        id('seqMemo').value = seq.memo || '';
         tempPatterns = JSON.parse(JSON.stringify(seq.patterns));
       } else {
         id('seqModalTitle').textContent = '配列登録';
@@ -414,7 +418,7 @@
 
         pDiv.innerHTML = `
           <div style="display:flex; gap:8px; align-items:center; margin-bottom:8px;">
-            <input type="text" value="${pat.name}" onchange="tempPatterns[${pIdx}].name=this.value" style="margin:0; font-weight:bold;">
+            <input type="text" value="${pat.name.replace(/"/g, '&quot;')}" onchange="tempPatterns[${pIdx}].name=this.value" style="margin:0; font-weight:bold;">
             <button type="button" class="btn btn-sm btn-danger" onclick="removePattern(${pIdx})">削除</button>
           </div>
           <div class="seq-card-list">${cardsHtml}</div>
@@ -490,13 +494,14 @@
         renderSequences();
       });
     }
+
     function renderSequences() {
       const query = normalizeText(id('seqSearchInput').value);
       const list = id('sequenceList');
       list.innerHTML = '';
 
       const filtered = db.sequences.filter(seq => {
-        if (normalizeText(seq.memo).includes(query)) return true;
+        if (seq.memo && normalizeText(seq.memo).includes(query)) return true;
         return seq.patterns.some(pat => 
           pat.cardIds.some(cId => {
             const card = db.cards.find(c => c.id === cId);
@@ -539,7 +544,7 @@
               <strong style="font-size:14px;">排出配列メモ</strong>
             </div>
             <div>
-              <button class="btn btn-sm" onclick='openSequenceModal(${JSON.stringify(seq)})'>編集</button>
+              <button class="btn btn-sm" onclick='openSequenceModal(${JSON.stringify(seq).replace(/'/g, "&#39;")})'>編集</button>
               <button class="btn btn-sm btn-danger" onclick="deleteSequence('${seq.id}')">削除</button>
             </div>
           </div>
