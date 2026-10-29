@@ -38,7 +38,7 @@
     header h1 { font-size: 15px; color: var(--primary); }
     .header-actions { display: flex; gap: 6px; align-items: center; }
     .theme-toggle, .share-btn {
-      background: none; border: 1px solid var(--border-color); color: var(--text-color); padding: 4px 8px; border-radius: 12px; font-size: 11px; cursor: pointer;
+      background: none; border: 1px solid var(--border-color); color: var(--text-color); padding: 4px 8px; border-radius: 12px; font-size: 11px; cursor: pointer; white-space: nowrap;
     }
     .share-btn { background-color: var(--accent-bg); border-color: var(--primary); color: var(--primary); font-weight: bold; }
     nav { display: flex; background: var(--card-bg); border-bottom: 1px solid var(--border-color); }
@@ -83,7 +83,7 @@
     .toast {
       position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
       background: rgba(0,0,0,0.8); color: white; padding: 10px 20px; border-radius: 20px;
-      font-size: 13px; z-index: 1000; display: none;
+      font-size: 13px; z-index: 1000; display: none; max-width: 90%; text-align: center;
     }
     .ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   </style>
@@ -92,7 +92,8 @@
   <header>
     <h1>アイカツ！アンコール 排出配列メモ</h1>
     <div class="header-actions">
-      <button class="share-btn" onclick="shareDataUrl()">配列URL共有</button>
+      <button class="share-btn" onclick="shareDataUrl(false)">URL共有</button>
+      <button class="share-btn" onclick="shareDataUrl(true)">画像付き</button>
       <button class="theme-toggle" id="themeToggleBtn">ダークモード</button>
     </div>
   </header>
@@ -191,65 +192,230 @@
     </div>
   </div>
 
-  <div id="toast" class="toast">共有URLをコピーしました！</div>
+  <div id="toast" class="toast"></div>
   <script>
     let db = { cards: [], sequences: [] };
     let assets = {};
-
-    function initData() {
-      const params = new URLSearchParams(window.location.search);
-      const sharedData = params.get('data');
-      if (sharedData) {
-        try {
-          const decoded = JSON.parse(decodeURIComponent(escape(atob(sharedData))));
-          db = decoded || { cards: [], sequences: [] };
-          saveData();
-          window.history.replaceState({}, document.title, window.location.pathname);
-        } catch(e) {
-          console.error("データ読み込み失敗", e);
-        }
-      } else {
-        db = JSON.parse(localStorage.getItem('aikatsu_db')) || { cards: [], sequences: [] };
-        assets = JSON.parse(localStorage.getItem('aikatsu_assets')) || {};
-      }
-    }
-
-    initData();
-
     let tempImageBase64 = null;
     let activePatternIndexForSelect = null;
+    let tempPatterns = [];
+    let toastTimer = null;
 
-    function saveData() {
-      localStorage.setItem('aikatsu_db', JSON.stringify(db));
-      localStorage.setItem('aikatsu_assets', JSON.stringify(assets));
+    function id(str) { return document.getElementById(str); }
+
+    // ---- HTMLエスケープ / ID無害化（共有データ対策） ----
+    function esc(s) {
+      return String(s == null ? '' : s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+    }
+    function safeId(s) { return String(s == null ? '' : s).replace(/[^\w-]/g, '').slice(0, 60); }
+
+    // ---- 保存・読み込み ----
+    function loadLocal() {
+      try { db = JSON.parse(localStorage.getItem('aikatsu_db')) || { cards: [], sequences: [] }; }
+      catch (e) { db = { cards: [], sequences: [] }; }
+      try { assets = JSON.parse(localStorage.getItem('aikatsu_assets')) || {}; }
+      catch (e) { assets = {}; }
     }
 
-    function shareDataUrl() {
-      const jsonStr = JSON.stringify(db);
-      const base64Str = btoa(unescape(encodeURIComponent(jsonStr)));
-      const shareUrl = window.location.origin + window.location.pathname + '?data=' + encodeURIComponent(base64Str);
-
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(shareUrl).then(() => { showToast(); });
-      } else {
-        prompt("以下のURLをコピーしてください", shareUrl);
+    function saveData() {
+      try {
+        localStorage.setItem('aikatsu_db', JSON.stringify(db));
+        localStorage.setItem('aikatsu_assets', JSON.stringify(assets));
+      } catch (e) {
+        showToast('保存容量がいっぱいです。画像を減らしてください');
       }
     }
 
-    function showToast() {
+    function showToast(msg) {
       const t = id('toast');
+      t.textContent = msg || '共有URLをコピーしました！';
       t.style.display = 'block';
-      setTimeout(() => { t.style.display = 'none'; }, 2000);
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => { t.style.display = 'none'; }, 2500);
     }
 
+    // ---- 圧縮・エンコード（URL短縮） ----
+    function bytesToB64url(bytes) {
+      let bin = '';
+      const CH = 0x8000;
+      for (let i = 0; i < bytes.length; i += CH) {
+        bin += String.fromCharCode.apply(null, bytes.subarray(i, i + CH));
+      }
+      return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    }
+
+    function b64urlToBytes(s) {
+      s = s.replace(/-/g, '+').replace(/_/g, '/');
+      while (s.length % 4) s += '=';
+      const bin = atob(s);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      return bytes;
+    }
+
+    async function pipeBytes(bytes, transform) {
+      const out = new Blob([bytes]).stream().pipeThrough(transform);
+      return new Uint8Array(await new Response(out).arrayBuffer());
+    }
+
+    async function packString(str) {
+      const raw = new TextEncoder().encode(str);
+      if (window.CompressionStream) {
+        return 'z' + bytesToB64url(await pipeBytes(raw, new CompressionStream('deflate-raw')));
+      }
+      return 'j' + bytesToB64url(raw);
+    }
+
+    async function unpackString(s) {
+      const type = s[0];
+      const bytes = b64urlToBytes(s.slice(1));
+      if (type === 'z') {
+        return new TextDecoder().decode(await pipeBytes(bytes, new DecompressionStream('deflate-raw')));
+      }
+      return new TextDecoder().decode(bytes);
+    }
+
+    // ---- 共有用サムネ作成 ----
+    function makeThumb(dataUrl) {
+      return new Promise(resolve => {
+        const img = new Image();
+        img.onload = () => {
+          const maxDim = 120;
+          let w = img.width, h = img.height;
+          if (w > h) { if (w > maxDim) { h = Math.round(h * maxDim / w); w = maxDim; } }
+          else { if (h > maxDim) { w = Math.round(w * maxDim / h); h = maxDim; } }
+          const canvas = document.createElement('canvas');
+          canvas.width = w; canvas.height = h;
+          canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+          resolve(canvas.toDataURL('image/jpeg', 0.5));
+        };
+        img.onerror = () => resolve('');
+        img.src = dataUrl;
+      });
+    }
+
+    // ---- 共有データ作成（短いキー＋カードは番号参照） ----
+    async function buildCompact(withImages) {
+      const idx = {};
+      db.cards.forEach((c, i) => { idx[c.id] = i; });
+      const cards = [];
+      for (const c of db.cards) {
+        const row = [c.id, c.number, c.name];
+        if (withImages && assets[c.id]) {
+          const t = await makeThumb(assets[c.id]);
+          if (t) row.push(t.replace(/^data:image\/jpeg;base64,/, ''));
+        }
+        cards.push(row);
+      }
+      const seqs = db.sequences.map(s => [
+        s.id,
+        s.memo || '',
+        s.patterns.map(p => [p.name, p.cardIds.map(x => idx[x]).filter(x => x !== undefined)])
+      ]);
+      return JSON.stringify({ v: 2, c: cards, s: seqs });
+    }
+
+    async function shareDataUrl(withImages) {
+      try {
+        showToast('URLを作成中...');
+        const packed = await packString(await buildCompact(withImages));
+        const base = location.href.split(/[?#]/)[0];
+        const shareUrl = base + '?s=' + packed;
+        const note = withImages ? `（画像付き・${shareUrl.length}文字）` : `（${shareUrl.length}文字）`;
+
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(shareUrl);
+          showToast('共有URLをコピーしました！' + note);
+        } else {
+          prompt('以下のURLをコピーしてください', shareUrl);
+        }
+      } catch (e) {
+        console.error(e);
+        showToast('共有URLの作成に失敗しました');
+      }
+    }
+
+    // ---- 共有データの取り込み ----
+    function importCompact(obj) {
+      const cards = [];
+      const newAssets = {};
+      (obj.c || []).forEach((r, i) => {
+        const cid = safeId(r[0]) || ('card_' + Date.now() + '_' + i);
+        cards.push({ id: cid, number: String(r[1] || ''), name: String(r[2] || '') });
+        if (r[3]) {
+          const b = String(r[3]).replace(/[^A-Za-z0-9+\/=]/g, '');
+          if (b) newAssets[cid] = 'data:image/jpeg;base64,' + b;
+        }
+      });
+      const sequences = (obj.s || []).map((r, i) => ({
+        id: safeId(r[0]) || ('seq_' + Date.now() + '_' + i),
+        memo: String(r[1] || ''),
+        patterns: (r[2] || []).map(p => ({
+          name: String(p[0] || ''),
+          cardIds: (p[1] || []).map(n => cards[n] && cards[n].id).filter(Boolean)
+        }))
+      }));
+      return { db: { cards, sequences }, newAssets };
+    }
+
+    // 旧形式（?data=...）のリンクも読めるようにする
+    function importLegacy(old) {
+      const cards = (old.cards || []).map(c => ({ id: safeId(c.id), number: String(c.number || ''), name: String(c.name || '') }));
+      const sequences = (old.sequences || []).map(s => ({
+        id: safeId(s.id),
+        memo: String(s.memo || ''),
+        patterns: (s.patterns || []).map(p => ({ name: String(p.name || ''), cardIds: (p.cardIds || []).map(safeId) }))
+      }));
+      return { db: { cards, sequences }, newAssets: {} };
+    }
+
+    async function initData() {
+      loadLocal();
+      const params = new URLSearchParams(location.search);
+      const s = params.get('s');
+      const legacy = params.get('data');
+      if (!s && !legacy) return;
+
+      let incoming = null;
+      try {
+        if (s) incoming = importCompact(JSON.parse(await unpackString(s)));
+        else incoming = importLegacy(JSON.parse(decodeURIComponent(escape(atob(legacy)))));
+      } catch (e) {
+        console.error('データ読み込み失敗', e);
+        showToast('共有データの読み込みに失敗しました');
+      }
+      history.replaceState({}, document.title, location.pathname);
+      if (!incoming) return;
+
+      const apply = () => {
+        const merged = {};
+        incoming.db.cards.forEach(c => {
+          // 自分の端末の画像は消さない。なければ共有の画像を使う
+          if (assets[c.id]) merged[c.id] = assets[c.id];
+          else if (incoming.newAssets[c.id]) merged[c.id] = incoming.newAssets[c.id];
+        });
+        db = incoming.db;
+        assets = merged;
+        saveData();
+        renderSequences();
+        renderCards();
+        showToast('共有データを読み込みました');
+      };
+
+      if (db.cards.length || db.sequences.length) {
+        showConfirm('共有データの読み込み', 'この端末の既存データが共有データで置き換わります。よろしいですか？', apply, '読み込む');
+      } else {
+        apply();
+      }
+    }
+
+    // ---- テーマ ----
     const themeBtn = id('themeToggleBtn');
     themeBtn.addEventListener('click', () => {
       const isDark = document.body.getAttribute('data-theme') === 'dark';
       document.body.setAttribute('data-theme', isDark ? 'light' : 'dark');
       themeBtn.textContent = isDark ? 'ダークモード' : 'ライトモード';
     });
-
-    function id(str) { return document.getElementById(str); }
 
     function normalizeText(str) {
       if (!str) return '';
@@ -270,9 +436,10 @@
       }
     }
 
-    function showConfirm(title, msg, onOk) {
+    function showConfirm(title, msg, onOk, okLabel) {
       id('confirmTitle').textContent = title;
       id('confirmMessage').textContent = msg;
+      id('confirmOkBtn').textContent = okLabel || '削除する';
       id('confirmOkBtn').onclick = () => { onOk(); closeConfirmModal(); };
       id('confirmModal').style.display = 'flex';
     }
@@ -280,6 +447,7 @@
     function closeConfirmModal() { id('confirmModal').style.display = 'none'; }
     function closeModal(modalId) { id(modalId).style.display = 'none'; }
 
+    // ---- カード ----
     function handleImageUpload(e) {
       const file = e.target.files[0];
       if (!file) return;
@@ -325,6 +493,11 @@
       id('cardModal').style.display = 'flex';
     }
 
+    function openCardById(cardId) {
+      const card = db.cards.find(c => c.id === cardId);
+      if (card) openCardModal(card);
+    }
+
     function saveCard(e) {
       e.preventDefault();
       const cardId = id('cardId').value || 'card_' + Date.now();
@@ -347,7 +520,7 @@
         db.cards = db.cards.filter(c => c.id !== cardId);
         delete assets[cardId];
         db.sequences.forEach(seq => {
-          seq.patterns.forEach(pat => { pat.cardIds = pat.cardIds.filter(id => id !== cardId); });
+          seq.patterns.forEach(pat => { pat.cardIds = pat.cardIds.filter(cid => cid !== cardId); });
         });
         saveData();
         renderCards();
@@ -365,15 +538,13 @@
         const div = document.createElement('div');
         div.className = 'card-item';
         div.style.textAlign = 'center';
-        
-        const cardJsonStr = JSON.stringify(c).replace(/'/g, "&#39;");
 
         div.innerHTML = `
           <img src="${imgSrc}" class="card-thumb" onclick="openCardDetail('${c.id}')" style="cursor:pointer">
-          <div style="font-weight:bold; font-size:12px; margin-top:6px;" class="ellipsis">${c.number}</div>
-          <div style="font-size:12px; margin-bottom:8px;" class="ellipsis">${c.name}</div>
+          <div style="font-weight:bold; font-size:12px; margin-top:6px;" class="ellipsis">${esc(c.number)}</div>
+          <div style="font-size:12px; margin-bottom:8px;" class="ellipsis">${esc(c.name)}</div>
           <div style="display:flex; gap:4px; justify-content:center;">
-            <button class="btn btn-sm" onclick='openCardModal(${cardJsonStr})'>編集</button>
+            <button class="btn btn-sm" onclick="openCardById('${c.id}')">編集</button>
             <button class="btn btn-sm btn-danger" onclick="deleteCard('${c.id}')">削除</button>
           </div>
         `;
@@ -388,7 +559,7 @@
       const imgSrc = assets[card.id] || '';
       id('detailCardInfo').innerHTML = `
         ${imgSrc ? `<img src="${imgSrc}" style="width:100px; border-radius:6px; display:block; margin:0 auto 8px;">` : ''}
-        <div style="text-align:center;"><strong>カード番号:</strong> ${card.number}</div>
+        <div style="text-align:center;"><strong>カード番号:</strong> ${esc(card.number)}</div>
       `;
 
       const history = [];
@@ -410,15 +581,14 @@
         history.forEach(h => {
           const div = document.createElement('div');
           div.style.fontSize = '12px'; div.style.padding = '6px'; div.style.borderBottom = '1px solid var(--border-color)';
-          div.innerHTML = `${h.patternName} の <strong>${h.order}枚目</strong>に排出 ${h.memo ? `<br><span style="color:var(--text-sub);">${h.memo}</span>` : ''}`;
+          div.innerHTML = `${esc(h.patternName)} の <strong>${h.order}枚目</strong>に排出 ${h.memo ? `<br><span style="color:var(--text-sub);">${esc(h.memo)}</span>` : ''}`;
           histList.appendChild(div);
         });
       }
       id('cardDetailModal').style.display = 'flex';
     }
 
-    let tempPatterns = [];
-
+    // ---- 配列 ----
     function openSequenceModal(seq = null) {
       id('seqForm').reset();
       if (seq) {
@@ -433,6 +603,11 @@
       }
       renderTempPatterns();
       id('sequenceModal').style.display = 'flex';
+    }
+
+    function openSequenceById(seqId) {
+      const seq = db.sequences.find(s => s.id === seqId);
+      if (seq) openSequenceModal(seq);
     }
 
     function addPatternToSeqModal() {
@@ -454,7 +629,7 @@
           return `
             <div class="seq-card-row">
               <span class="badge">${cIdx + 1}</span>
-              <span style="flex:1;" class="ellipsis">${name}</span>
+              <span style="flex:1;" class="ellipsis">${esc(name)}</span>
               <button type="button" class="btn btn-sm btn-secondary" onclick="moveSeqCard(${pIdx}, ${cIdx}, -1)">↑</button>
               <button type="button" class="btn btn-sm btn-secondary" onclick="moveSeqCard(${pIdx}, ${cIdx}, 1)">↓</button>
               <button type="button" class="btn btn-sm btn-danger" onclick="removeSeqCard(${pIdx}, ${cIdx})">×</button>
@@ -464,7 +639,7 @@
 
         pDiv.innerHTML = `
           <div style="display:flex; gap:8px; align-items:center; margin-bottom:8px;">
-            <input type="text" value="${pat.name.replace(/"/g, '&quot;')}" onchange="tempPatterns[${pIdx}].name=this.value" style="margin:0; font-weight:bold;">
+            <input type="text" value="${esc(pat.name)}" onchange="tempPatterns[${pIdx}].name=this.value" style="margin:0; font-weight:bold;">
             <button type="button" class="btn btn-sm btn-danger" onclick="removePattern(${pIdx})">削除</button>
           </div>
           <div class="seq-card-list">${cardsHtml}</div>
@@ -512,8 +687,8 @@
           }
         };
         div.innerHTML = `
-          <div style="font-weight:bold;">${c.number}</div>
-          <div style="flex:1;" class="ellipsis">${c.name}</div>
+          <div style="font-weight:bold;">${esc(c.number)}</div>
+          <div style="flex:1;" class="ellipsis">${esc(c.name)}</div>
         `;
         container.appendChild(div);
       });
@@ -548,7 +723,7 @@
 
       const filtered = db.sequences.filter(seq => {
         if (seq.memo && normalizeText(seq.memo).includes(query)) return true;
-        return seq.patterns.some(pat => 
+        return seq.patterns.some(pat =>
           pat.cardIds.some(cId => {
             const card = db.cards.find(c => c.id === cId);
             return card && (normalizeText(card.name).includes(query) || normalizeText(card.number).includes(query));
@@ -569,14 +744,14 @@
               <div style="flex: 0 0 60px; text-align: center; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 6px; padding: 4px;">
                 ${thumb ? `<img src="${thumb}" style="width: 45px; height: 60px; object-fit: cover; border-radius: 4px; display: block; margin: 0 auto 2px;">` : `<div style="width: 45px; height: 60px; background: var(--border-color); border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 9px; color: var(--text-sub); margin: 0 auto 2px;">NoImg</div>`}
                 <div style="font-size: 10px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${idx + 1}.</div>
-                <div style="font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${num}</div>
+                <div style="font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${esc(num)}</div>
               </div>
             `;
           }).join('');
 
           return `
             <div style="margin-top: 8px; background: var(--accent-bg); padding: 8px; border-radius: 6px;">
-              <strong style="font-size: 12px; display: block; margin-bottom: 4px; color: var(--primary);">${pat.name}</strong>
+              <strong style="font-size: 12px; display: block; margin-bottom: 4px; color: var(--primary);">${esc(pat.name)}</strong>
               <div style="display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px;">
                 ${cardChips || '<div style="font-size: 11px; color: var(--text-sub);">カードなし</div>'}
               </div>
@@ -584,26 +759,27 @@
           `;
         }).join('');
 
-        const seqJsonStr = JSON.stringify(seq).replace(/'/g, "&#39;");
-
         div.innerHTML = `
           <div style="display:flex; justify-content:space-between; align-items:flex-start;">
             <div>
               <strong style="font-size:14px;">排出配列メモ</strong>
             </div>
             <div>
-              <button class="btn btn-sm" onclick='openSequenceModal(${seqJsonStr})'>編集</button>
+              <button class="btn btn-sm" onclick="openSequenceById('${seq.id}')">編集</button>
               <button class="btn btn-sm btn-danger" onclick="deleteSequence('${seq.id}')">削除</button>
             </div>
           </div>
-          ${seq.memo ? `<div style="font-size:12px; margin-top:6px; color:var(--text-sub);">${seq.memo}</div>` : ''}
+          ${seq.memo ? `<div style="font-size:12px; margin-top:6px; color:var(--text-sub);">${esc(seq.memo)}</div>` : ''}
           ${patternsHtml}
         `;
         list.appendChild(div);
       });
     }
 
+    // ---- 起動 ----
+    loadLocal();
     renderSequences();
+    initData();
   </script>
 </body>
 </html>
