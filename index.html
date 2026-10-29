@@ -34,6 +34,9 @@ textarea{resize:vertical}
 .cr.hit{background:var(--hit)}
 .cr.nx{background:var(--next);font-weight:bold}
 .cr.nx .ix{background:#e6a800}
+.cr.pr{border:2px solid #2196f3;border-radius:6px;margin:2px 0}
+.cr.st{border:2px solid #4caf50;border-radius:6px;margin:2px 0}
+.cr.pr.st{box-shadow:0 0 0 2px #4caf50 inset}
 .tag{font-size:10px;font-weight:bold;color:#b37a00}
 .dots{text-align:center;color:var(--sub);font-size:12px;padding:2px}
 .info{font-size:12px;color:var(--sub);margin-top:6px}
@@ -51,8 +54,8 @@ textarea{resize:vertical}
 
 <div class="wrap">
   <div class="tab on" id="t0">
-    <div class="row"><input id="q" placeholder="出たカード番号を順に入力 例: 01-01 03-02 05-01" oninput="renderSeq()" autocomplete="off"><button class="btn g" onclick="clearQ()">消</button></div>
-    <div class="info" id="qinfo">カード番号をスペース区切りで順に入れると、一致する配列と「次のカード」が出ます。</div>
+    <div class="row"><input id="q" placeholder="出た番号を順に入力 例: 01 03 05（E1-01なら01でOK）" oninput="renderSeq()" autocomplete="off"><button class="btn g" onclick="clearQ()">消</button></div>
+    <div class="info" id="qinfo"></div>
     <button class="btn" style="width:100%;margin-top:10px" onclick="openSeq()">＋ 新しい配列を登録</button>
     <div id="seqList"></div>
   </div>
@@ -60,7 +63,7 @@ textarea{resize:vertical}
     <input id="cq" placeholder="番号・名前で検索" oninput="renderCards()">
     <div class="box">
       <div style="font-size:12px;color:var(--sub);margin-bottom:6px">まとめて登録（1行に「番号 カード名」）</div>
-      <textarea id="bulk" rows="3" placeholder="01-01 スターフェスティバルコーデ&#10;01-02 ○○コーデ"></textarea>
+      <textarea id="bulk" rows="3" placeholder="E1-01 スターフェスティバルコーデ&#10;E1-01PR ○○コーデ"></textarea>
       <button class="btn" style="width:100%;margin-top:6px" onclick="bulkAdd()">追加</button>
     </div>
     <div class="box" id="cardList" style="padding:0"></div>
@@ -83,7 +86,6 @@ textarea{resize:vertical}
   <div class="row"><button class="btn g" style="flex:1" onclick="cmClose()">いいえ</button><button class="btn r" style="flex:1" id="cok">削除する</button></div>
 </div></div>
 <div class="toast" id="toast"></div>
-
 <script>
 let db={cards:[],seqs:[]}; // cards:[{n,name}] seqs:[{id,memo,pats:[{name,nums:[]}]}]
 let editPats=[],tt=null;
@@ -92,6 +94,26 @@ const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;'
 const norm=s=>String(s||'').normalize('NFKC').trim().toUpperCase();
 const toks=s=>norm(s).split(/[\s,、]+/).filter(Boolean);
 const nameOf=n=>{const c=db.cards.find(c=>c.n===n);return c?c.name:''};
+const INFO='番号をスペース区切りで順に入れると、一致する配列と「次のカード」が出ます。01だけでE1-01もヒット。番号のあとにスペースで確定。';
+
+// ---- 広い検索（E1-01 を 01 や 1 でもヒット） ----
+const SUF=/(PR|[\u2B50\u2605\u2606]\uFE0F?)+$/u;
+function keys(n){
+  const core=n.replace(SUF,'');
+  const tail=core.split('-').pop();
+  return [n,core,tail,tail.replace(/^0+/,''),n.replace(/-/g,''),core.replace(/-/g,'')].filter(Boolean);
+}
+function tmatch(n,t,partial){
+  return keys(n).some(k=>partial?k.includes(t):k===t);
+}
+
+// ---- 枠（PR=青 / ⭐=緑） ----
+function frame(n){
+  let c='';
+  if(/PR/.test(n))c+=' pr';
+  if(/[\u2B50\u2605\u2606]/u.test(n))c+=' st';
+  return c;
+}
 
 function toast(m){const t=$('toast');t.textContent=m;t.style.display='block';clearTimeout(tt);tt=setTimeout(()=>t.style.display='none',2800)}
 function save(){try{localStorage.setItem('aikatsu_db2',JSON.stringify(db))}catch(e){toast('保存に失敗しました')}}
@@ -150,15 +172,16 @@ function clearQ(){$('q').value='';renderSeq()}
 function addToQ(n){const q=$('q');q.value=(q.value.trim()+' '+n).trim()+' ';renderSeq();q.focus()}
 
 function row(i,n,cls,tag){
-  return `<div class="cr ${cls||''}"><span class="ix">${i+1}</span><span class="num">${esc(n)}</span><span class="nm">${esc(nameOf(n))}</span>${tag?`<span class="tag">${tag}</span>`:''}</div>`;
+  return `<div class="cr ${cls||''}${frame(n)}"><span class="ix">${i+1}</span><span class="num">${esc(n)}</span><span class="nm">${esc(nameOf(n))}</span>${tag?`<span class="tag">${tag}</span>`:''}</div>`;
 }
 
-function findPos(nums,t){
+function findPos(nums,t,exLast){
   const k=t.length,res=[];
   for(let i=0;i+k<=nums.length;i++){
     let ok=true;
     for(let j=0;j<k;j++){
-      if(j<k-1?nums[i+j]!==t[j]:!nums[i+j].startsWith(t[j])){ok=false;break}
+      const partial=(j===k-1)&&!exLast;
+      if(!tmatch(nums[i+j],t[j],partial)){ok=false;break}
     }
     if(ok)res.push(i);
   }
@@ -166,7 +189,9 @@ function findPos(nums,t){
 }
 
 function renderSeq(){
-  const t=toks($('q').value),box=$('seqList');
+  const raw=$('q').value;
+  const t=toks(raw),box=$('seqList');
+  const exLast=/\s$/.test(raw);
   let h='',hits=0;
   db.seqs.forEach(s=>{
     let ph='';
@@ -175,7 +200,7 @@ function renderSeq(){
         ph+=`<div class="pat"><b>${esc(p.name)}</b>（${p.nums.length}枚）<div style="background:var(--card);border-radius:6px;margin-top:4px">${p.nums.map((n,i)=>row(i,n)).join('')||'<div class="dots">カードなし</div>'}</div></div>`;
         return;
       }
-      const pos=findPos(p.nums,t);
+      const pos=findPos(p.nums,t,exLast);
       pos.forEach(i=>{
         hits++;
         const k=t.length,end=i+k,from=Math.max(0,i-2),to=Math.min(p.nums.length,end+6);
@@ -192,13 +217,13 @@ function renderSeq(){
     if(ph)h+=`<div class="box"><div class="row" style="justify-content:space-between"><strong style="font-size:13px">${esc(s.memo)||'排出配列メモ'}</strong><span style="white-space:nowrap"><button class="btn sm" onclick="openSeq('${s.id}')">編集</button> <button class="btn sm r" onclick="delSeq('${s.id}')">削除</button></span></div>${ph}</div>`;
   });
   box.innerHTML=h||(t.length?'<div class="info" style="text-align:center;margin-top:16px">一致する配列はありません</div>':'<div class="info" style="text-align:center;margin-top:16px">配列が未登録です</div>');
-  $('qinfo').textContent=t.length?`入力 ${t.length}枚 → 一致 ${hits}件`:'カード番号をスペース区切りで順に入れると、一致する配列と「次のカード」が出ます。';
+  $('qinfo').textContent=t.length?`入力 ${t.length}枚 → 一致 ${hits}件`:INFO;
 }
 
 function renderCards(){
   const q=norm($('cq').value);
-  const l=db.cards.filter(c=>norm(c.n).includes(q)||norm(c.name).includes(q));
-  $('cardList').innerHTML=l.map(c=>`<div class="cr"><span class="num">${esc(c.n)}</span><input value="${esc(c.name)}" placeholder="カード名" onchange="renameCard('${esc(c.n)}',this.value)" style="padding:5px 8px;font-size:13px"><button class="btn sm r" onclick="delCard('${esc(c.n)}')">×</button></div>`).join('')||'<div class="dots" style="padding:14px">カードがありません</div>';
+  const l=db.cards.filter(c=>!q||norm(c.name).includes(q)||keys(c.n).some(k=>k.includes(q)));
+  $('cardList').innerHTML=l.map(c=>`<div class="cr${frame(c.n)}"><span class="num">${esc(c.n)}</span><input value="${esc(c.name)}" placeholder="カード名" onchange="renameCard('${esc(c.n)}',this.value)" style="padding:5px 8px;font-size:13px"><button class="btn sm r" onclick="delCard('${esc(c.n)}')">×</button></div>`).join('')||'<div class="dots" style="padding:14px">カードがありません</div>';
 }
 function renameCard(n,v){const c=db.cards.find(c=>c.n===n);if(c){c.name=v.trim();save()}}
 function cmClose(){$('cm').style.display='none'}
@@ -222,7 +247,7 @@ function openSeq(sid){
 }
 function closeSeq(){$('sm').style.display='none'}
 function drawPats(){
-  $('pats').innerHTML=editPats.map((p,i)=>`<div class="box" style="margin-top:8px"><div class="row" style="margin-bottom:6px"><input value="${esc(p.name)}" oninput="editPats[${i}].name=this.value"><button class="btn sm r" onclick="editPats.splice(${i},1);drawPats()">削除</button></div><textarea rows="4" placeholder="01-01 03-02 05-01 ..." oninput="editPats[${i}].txt=this.value">${esc(p.txt)}</textarea></div>`).join('');
+  $('pats').innerHTML=editPats.map((p,i)=>`<div class="box" style="margin-top:8px"><div class="row" style="margin-bottom:6px"><input value="${esc(p.name)}" oninput="editPats[${i}].name=this.value"><button class="btn sm r" onclick="editPats.splice(${i},1);drawPats()">削除</button></div><textarea rows="4" placeholder="E1-01 E1-02PR E1-03 ..." oninput="editPats[${i}].txt=this.value">${esc(p.txt)}</textarea></div>`).join('');
 }
 function addPat(){editPats.push({name:(editPats.length+1)+'通り目',txt:''});drawPats()}
 function saveSeq(){
