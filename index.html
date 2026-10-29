@@ -1,835 +1,244 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>アイカツ！アンコール 排出配列メモ</title>
-  <style>
-    :root {
-      --bg-color: #f5f6f8;
-      --card-bg: #ffffff;
-      --text-color: #333333;
-      --text-sub: #666666;
-      --primary: #ff4081;
-      --primary-hover: #f50057;
-      --border-color: #e0e0e0;
-      --input-bg: #ffffff;
-      --accent-bg: #fff0f5;
-      --shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-    }
-    [data-theme="dark"] {
-      --bg-color: #121212;
-      --card-bg: #1e1e1e;
-      --text-color: #e0e0e0;
-      --text-sub: #aaaaaa;
-      --primary: #ff4081;
-      --primary-hover: #ff80ab;
-      --border-color: #333333;
-      --input-bg: #2c2c2c;
-      --accent-bg: #2a1b24;
-      --shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
-    }
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-    body { background-color: var(--bg-color); color: var(--text-color); padding-bottom: 70px; }
-    header {
-      background-color: var(--card-bg); border-bottom: 1px solid var(--border-color);
-      padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 10;
-    }
-    header h1 { font-size: 15px; color: var(--primary); }
-    .header-actions { display: flex; gap: 6px; align-items: center; }
-    .theme-toggle, .share-btn {
-      background: none; border: 1px solid var(--border-color); color: var(--text-color); padding: 4px 8px; border-radius: 12px; font-size: 11px; cursor: pointer; white-space: nowrap;
-    }
-    .share-btn { background-color: var(--accent-bg); border-color: var(--primary); color: var(--primary); font-weight: bold; }
-    nav { display: flex; background: var(--card-bg); border-bottom: 1px solid var(--border-color); }
-    .tab-btn {
-      flex: 1; padding: 12px; text-align: center; background: none; border: none;
-      color: var(--text-sub); font-weight: bold; font-size: 14px; cursor: pointer; border-bottom: 3px solid transparent;
-    }
-    .tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); }
-    .container { padding: 16px; max-width: 600px; margin: 0 auto; }
-    .tab-content { display: none; }
-    .tab-content.active { display: block; }
-    .btn {
-      background-color: var(--primary); color: white; border: none; padding: 8px 16px;
-      border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 14px; display: inline-flex; align-items: center; justify-content: center; gap: 4px;
-    }
-    .btn-secondary { background-color: #757575; }
-    .btn-danger { background-color: #f44336; }
-    .btn-sm { padding: 4px 8px; font-size: 12px; border-radius: 4px; }
-    .btn-block { width: 100%; }
-    .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 10px; margin-top: 16px; }
-    .card-item, .sequence-item {
-      background-color: var(--card-bg); border-radius: 8px; padding: 10px; margin-bottom: 12px;
-      box-shadow: var(--shadow); border: 1px solid var(--border-color);
-    }
-    .card-thumb { width: 100%; aspect-ratio: 3/4; object-fit: cover; border-radius: 6px; background: var(--border-color); }
-    input, textarea, select {
-      width: 100%; padding: 8px 12px; margin-top: 4px; margin-bottom: 12px;
-      border: 1px solid var(--border-color); border-radius: 6px; background-color: var(--input-bg); color: var(--text-color); font-size: 14px;
-    }
-    .search-box { position: relative; margin-bottom: 16px; }
-    .modal {
-      display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-      background-color: rgba(0,0,0,0.5); z-index: 100; justify-content: center; align-items: center; padding: 16px;
-    }
-    .modal-content {
-      background-color: var(--card-bg); width: 100%; max-width: 500px; border-radius: 12px;
-      padding: 20px; max-height: 90vh; overflow-y: auto; box-shadow: var(--shadow);
-    }
-    .seq-card-list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
-    .seq-card-row { display: flex; align-items: center; gap: 8px; background: var(--accent-bg); padding: 8px 12px; border-radius: 6px; font-size: 13px; }
-    .badge { background-color: var(--primary); color: white; font-size: 11px; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
-    .toast {
-      position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
-      background: rgba(0,0,0,0.8); color: white; padding: 10px 20px; border-radius: 20px;
-      font-size: 13px; z-index: 1000; display: none; max-width: 90%; text-align: center;
-    }
-    .ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>アイカツ！アンコール 排出配列メモ</title>
+<style>
+:root{--bg:#f5f6f8;--card:#fff;--text:#333;--sub:#666;--pri:#ff4081;--bd:#e0e0e0;--acc:#fff0f5;--hit:#ffe0ec;--next:#fff3b0}
+[data-theme=dark]{--bg:#121212;--card:#1e1e1e;--text:#e0e0e0;--sub:#aaa;--bd:#333;--acc:#2a1b24;--hit:#4a1f33;--next:#5a4a00}
+*{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+body{background:var(--bg);color:var(--text);padding-bottom:60px}
+header{background:var(--card);border-bottom:1px solid var(--bd);padding:10px 12px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:10}
+header h1{font-size:14px;color:var(--pri)}
+.hb{display:flex;gap:6px}
+.chip{background:var(--acc);border:1px solid var(--pri);color:var(--pri);padding:4px 10px;border-radius:12px;font-size:11px;font-weight:bold;cursor:pointer}
+nav{display:flex;background:var(--card);border-bottom:1px solid var(--bd)}
+nav button{flex:1;padding:11px;background:none;border:none;border-bottom:3px solid transparent;color:var(--sub);font-weight:bold;font-size:14px}
+nav button.on{color:var(--pri);border-bottom-color:var(--pri)}
+.wrap{max-width:600px;margin:0 auto;padding:12px}
+.tab{display:none}.tab.on{display:block}
+input,textarea{width:100%;padding:9px 11px;border:1px solid var(--bd);border-radius:8px;background:var(--card);color:var(--text);font-size:15px}
+textarea{resize:vertical}
+.btn{background:var(--pri);color:#fff;border:none;padding:8px 14px;border-radius:8px;font-weight:bold;font-size:13px;cursor:pointer}
+.g{background:#757575}.r{background:#f44336}.sm{padding:4px 9px;font-size:12px}
+.row{display:flex;gap:6px;align-items:center}
+.box{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:10px;margin-top:12px}
+.pat{background:var(--acc);border-radius:8px;padding:8px;margin-top:8px}
+.pat b{font-size:12px;color:var(--pri)}
+.cr{display:flex;gap:8px;align-items:center;padding:7px 8px;border-bottom:1px solid var(--bd);font-size:14px}
+.cr:last-child{border:none}
+.ix{min-width:26px;text-align:center;background:var(--pri);color:#fff;border-radius:4px;font-size:11px;font-weight:bold;padding:2px 0}
+.num{font-weight:bold;min-width:56px}
+.nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--sub);font-size:13px}
+.cr.hit{background:var(--hit)}
+.cr.nx{background:var(--next);font-weight:bold}
+.cr.nx .ix{background:#e6a800}
+.tag{font-size:10px;font-weight:bold;color:#b37a00}
+.dots{text-align:center;color:var(--sub);font-size:12px;padding:2px}
+.info{font-size:12px;color:var(--sub);margin-top:6px}
+.modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;justify-content:center;align-items:center;padding:12px}
+.mc{background:var(--card);width:100%;max-width:500px;border-radius:12px;padding:16px;max-height:92vh;overflow-y:auto}
+.toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.85);color:#fff;padding:9px 18px;border-radius:20px;font-size:13px;z-index:1000;display:none}
+</style>
 </head>
 <body data-theme="light">
-  <header>
-    <h1>アイカツ！アンコール 排出配列メモ</h1>
-    <div class="header-actions">
-      <button class="share-btn" onclick="shareDataUrl(false)">URL共有</button>
-      <button class="share-btn" onclick="shareDataUrl(true)">画像付き</button>
-      <button class="theme-toggle" id="themeToggleBtn">ダークモード</button>
-    </div>
-  </header>
+<header>
+  <h1>アイカツ！排出配列メモ</h1>
+  <div class="hb"><span class="chip" onclick="share()">URL共有</span><span class="chip" id="themeBtn">ダーク</span></div>
+</header>
+<nav><button class="on" onclick="tab(0)">配列</button><button onclick="tab(1)">カード</button></nav>
 
-  <nav>
-    <button class="tab-btn active" onclick="switchTab('sequence')">排出配列一覧</button>
-    <button class="tab-btn" onclick="switchTab('cards')">カード図鑑</button>
-  </nav>
-
-  <div class="container">
-    <div id="sequenceTab" class="tab-content active">
-      <div class="search-box">
-        <input type="text" id="seqSearchInput" placeholder="カード名や番号で検索..." oninput="renderSequences()">
-      </div>
-      <button class="btn btn-block" onclick="openSequenceModal()">＋ 新しい配列を登録</button>
-      <div id="sequenceList" style="margin-top: 16px;"></div>
-    </div>
-
-    <div id="cardsTab" class="tab-content">
-      <div class="search-box">
-        <input type="text" id="cardSearchInput" placeholder="カード名や番号で検索..." oninput="renderCards()">
-      </div>
-      <button class="btn btn-block" onclick="openCardModal()">＋ 新しいカードを登録</button>
-      <div id="cardList" class="card-grid"></div>
-    </div>
+<div class="wrap">
+  <div class="tab on" id="t0">
+    <div class="row"><input id="q" placeholder="出たカード番号を順に入力 例: 01-01 03-02 05-01" oninput="renderSeq()" autocomplete="off"><button class="btn g" onclick="clearQ()">消</button></div>
+    <div class="info" id="qinfo">カード番号をスペース区切りで順に入れると、一致する配列と「次のカード」が出ます。</div>
+    <button class="btn" style="width:100%;margin-top:10px" onclick="openSeq()">＋ 新しい配列を登録</button>
+    <div id="seqList"></div>
   </div>
-
-  <div id="cardModal" class="modal">
-    <div class="modal-content">
-      <h3 id="cardModalTitle" style="margin-bottom: 12px; color: var(--primary);">カード登録</h3>
-      <form id="cardForm" onsubmit="saveCard(event)">
-        <input type="hidden" id="cardId">
-        <label style="font-size: 12px;">カード番号 (例: 01-01)</label>
-        <input type="text" id="cardNumberInput" required placeholder="01-01">
-        <label style="font-size: 12px;">カード名</label>
-        <input type="text" id="cardNameInput" required placeholder="スターフェスティバルコーデ">
-        <label style="font-size: 12px;">カード画像</label>
-        <input type="file" id="cardImageInput" accept="image/*" onchange="handleImageUpload(event)">
-        <div id="cardPhotoPreview" style="text-align: center;"></div>
-        <div style="display: flex; gap: 8px; margin-top: 16px;">
-          <button type="button" class="btn btn-secondary" style="flex:1;" onclick="closeModal('cardModal')">キャンセル</button>
-          <button type="submit" class="btn" style="flex:1;">保存</button>
-        </div>
-      </form>
+  <div class="tab" id="t1">
+    <input id="cq" placeholder="番号・名前で検索" oninput="renderCards()">
+    <div class="box">
+      <div style="font-size:12px;color:var(--sub);margin-bottom:6px">まとめて登録（1行に「番号 カード名」）</div>
+      <textarea id="bulk" rows="3" placeholder="01-01 スターフェスティバルコーデ&#10;01-02 ○○コーデ"></textarea>
+      <button class="btn" style="width:100%;margin-top:6px" onclick="bulkAdd()">追加</button>
     </div>
+    <div class="box" id="cardList" style="padding:0"></div>
   </div>
+</div>
 
-  <div id="cardDetailModal" class="modal">
-    <div class="modal-content">
-      <h3 id="detailCardName" style="margin-bottom: 8px; color: var(--primary);">カード名</h3>
-      <div id="detailCardInfo" style="margin-bottom: 12px; font-size: 13px;"></div>
-      <h4 style="font-size: 13px; margin-bottom: 6px; border-bottom: 1px solid var(--border-color); padding-bottom: 4px;">排出履歴</h4>
-      <div id="detailHistoryList" style="max-height: 200px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px;"></div>
-      <button type="button" class="btn btn-secondary btn-block" style="margin-top: 16px;" onclick="closeModal('cardDetailModal')">閉じる</button>
-    </div>
-  </div>
+<div class="modal" id="sm"><div class="mc">
+  <h3 style="color:var(--pri);margin-bottom:10px">配列の登録・編集</h3>
+  <input type="hidden" id="sid">
+  <div style="font-size:12px">メモ（任意）</div>
+  <textarea id="smemo" rows="2" style="margin-bottom:8px"></textarea>
+  <div style="font-size:12px;color:var(--sub);margin-bottom:4px">各パターンにカード番号をスペースか改行区切りで入力。未登録の番号は自動でカード登録されます。</div>
+  <div id="pats"></div>
+  <button class="btn g sm" onclick="addPat()">＋ パターン追加</button>
+  <div class="row" style="margin-top:14px"><button class="btn g" style="flex:1" onclick="closeSeq()">キャンセル</button><button class="btn" style="flex:1" onclick="saveSeq()">保存</button></div>
+</div></div>
 
-  <div id="sequenceModal" class="modal">
-    <div class="modal-content">
-      <h3 id="seqModalTitle" style="margin-bottom: 12px; color: var(--primary);">配列登録</h3>
-      <form id="seqForm" onsubmit="saveSequence(event)">
-        <input type="hidden" id="seqId">
-        <label style="font-size: 12px;">メモ (任意)</label>
-        <textarea id="seqMemo" rows="2" placeholder="初日朝イチの状況など..."></textarea>
-        <h4 style="font-size: 13px; margin: 12px 0 6px 0; border-bottom: 1px solid var(--border-color); padding-bottom: 4px;">排出パターン</h4>
-        <div id="seqPatternsContainer"></div>
-        <button type="button" class="btn btn-secondary btn-sm" style="margin-top: 6px;" onclick="addPatternToSeqModal()">＋ パターンを追加</button>
-        <div style="display: flex; gap: 8px; margin-top: 20px;">
-          <button type="button" class="btn btn-secondary" style="flex:1;" onclick="closeModal('sequenceModal')">キャンセル</button>
-          <button type="submit" class="btn" style="flex:1;">保存</button>
-        </div>
-      </form>
-    </div>
-  </div>
+<div class="modal" id="cm" style="z-index:200"><div class="mc" style="max-width:340px;text-align:center">
+  <p id="cmsg" style="font-size:14px;margin-bottom:14px"></p>
+  <div class="row"><button class="btn g" style="flex:1" onclick="cmClose()">いいえ</button><button class="btn r" style="flex:1" id="cok">削除する</button></div>
+</div></div>
+<div class="toast" id="toast"></div>
 
-  <div id="selectCardModal" class="modal">
-    <div class="modal-content">
-      <h3 style="margin-bottom: 12px; color: var(--primary);">追加するカードを選択</h3>
-      <div class="search-box">
-        <input type="text" id="selectCardSearch" placeholder="カード名や番号で検索..." oninput="renderSelectCardList()">
-      </div>
-      <button type="button" class="btn btn-sm btn-block" style="margin-bottom: 12px;" onclick="openCardModalFromSelect()">＋ 新規カードを登録して選択</button>
-      <div id="selectCardList" style="max-height: 250px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px;"></div>
-      <button type="button" class="btn btn-secondary btn-block" style="margin-top: 16px;" onclick="closeModal('selectCardModal')">閉じる</button>
-    </div>
-  </div>
+<script>
+let db={cards:[],seqs:[]}; // cards:[{n,name}] seqs:[{id,memo,pats:[{name,nums:[]}]}]
+let editPats=[],tt=null;
+const $=i=>document.getElementById(i);
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+const norm=s=>String(s||'').normalize('NFKC').trim().toUpperCase();
+const toks=s=>norm(s).split(/[\s,、]+/).filter(Boolean);
+const nameOf=n=>{const c=db.cards.find(c=>c.n===n);return c?c.name:''};
 
-  <div id="confirmModal" class="modal">
-    <div class="modal-content" style="max-width: 350px; text-align: center;">
-      <h3 id="confirmTitle" style="margin-bottom: 8px; color: var(--primary);">確認</h3>
-      <p id="confirmMessage" style="font-size: 13px; margin-bottom: 16px; color: var(--text-sub);"></p>
-      <div style="display: flex; gap: 8px;">
-        <button type="button" class="btn btn-secondary" style="flex:1;" onclick="closeConfirmModal()">いいえ</button>
-        <button type="button" id="confirmOkBtn" class="btn btn-danger" style="flex:1;">削除する</button>
-      </div>
-    </div>
-  </div>
+function toast(m){const t=$('toast');t.textContent=m;t.style.display='block';clearTimeout(tt);tt=setTimeout(()=>t.style.display='none',2800)}
+function save(){try{localStorage.setItem('aikatsu_db2',JSON.stringify(db))}catch(e){toast('保存に失敗しました')}}
 
-  <div id="toast" class="toast"></div>
-
-  <script>
-    let db = { cards: [], sequences: [] };
-    let assets = {};
-    let tempImageBase64 = null;
-    let activePatternIndexForSelect = null;
-    let tempPatterns = [];
-    let toastTimer = null;
-
-    function id(str) { return document.getElementById(str); }
-
-    // ---- HTMLエスケープ / ID無害化（共有データ対策） ----
-    function esc(s) {
-      return String(s == null ? '' : s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+function load(){
+  try{const d=JSON.parse(localStorage.getItem('aikatsu_db2'));if(d&&d.cards){db=d;return}}catch(e){}
+  // 旧データから移行（画像は使いません）
+  try{
+    const o=JSON.parse(localStorage.getItem('aikatsu_db'));
+    if(o&&o.cards){
+      const m={};o.cards.forEach(c=>{m[c.id]=norm(c.number)});
+      db.cards=o.cards.map(c=>({n:norm(c.number),name:c.name||''}));
+      db.seqs=(o.sequences||[]).map(s=>({id:s.id,memo:s.memo||'',pats:s.patterns.map(p=>({name:p.name,nums:p.cardIds.map(i=>m[i]).filter(Boolean)}))}));
+      save();
     }
-    function safeId(s) { return String(s == null ? '' : s).replace(/[^\w-]/g, '').slice(0, 60); }
+  }catch(e){}
+}
 
-    // ---- 保存・読み込み ----
-    function loadLocal() {
-      try { db = JSON.parse(localStorage.getItem('aikatsu_db')) || { cards: [], sequences: [] }; }
-      catch (e) { db = { cards: [], sequences: [] }; }
-      try { assets = JSON.parse(localStorage.getItem('aikatsu_assets')) || {}; }
-      catch (e) { assets = {}; }
+// ---- 圧縮 ----
+const b64=b=>{let s='';for(let i=0;i<b.length;i+=32768)s+=String.fromCharCode.apply(null,b.subarray(i,i+32768));return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')};
+const unb64=s=>{s=s.replace(/-/g,'+').replace(/_/g,'/');while(s.length%4)s+='=';const t=atob(s),b=new Uint8Array(t.length);for(let i=0;i<t.length;i++)b[i]=t.charCodeAt(i);return b};
+const pipe=async(b,t)=>new Uint8Array(await new Response(new Blob([b]).stream().pipeThrough(t)).arrayBuffer());
+async function pack(str){const r=new TextEncoder().encode(str);return window.CompressionStream?'z'+b64(await pipe(r,new CompressionStream('deflate-raw'))):'j'+b64(r)}
+async function unpack(s){const b=unb64(s.slice(1));return new TextDecoder().decode(s[0]==='z'?await pipe(b,new DecompressionStream('deflate-raw')):b)}
+
+async function share(){
+  try{
+    const names={};db.cards.forEach(c=>{if(c.name)names[c.n]=c.name});
+    const data={v:4,c:Object.entries(names),s:db.seqs.map(s=>[s.memo,s.pats.map(p=>[p.name,p.nums.join(' ')])])};
+    const url=location.href.split(/[?#]/)[0]+'?s='+await pack(JSON.stringify(data));
+    if(navigator.clipboard&&navigator.clipboard.writeText){await navigator.clipboard.writeText(url);toast('URLをコピー（'+url.length+'文字）')}
+    else prompt('コピーしてください',url);
+  }catch(e){toast('URL作成に失敗しました')}
+}
+
+async function initShared(){
+  const s=new URLSearchParams(location.search).get('s');
+  if(!s)return;
+  history.replaceState({},document.title,location.pathname);
+  try{
+    const o=JSON.parse(await unpack(s));
+    if(o.v!==4){toast('古い形式の共有URLです');return}
+    const cards=[],seen={};
+    const add=(n,name)=>{n=norm(n);if(!n)return;if(!seen[n]){seen[n]=1;cards.push({n,name:name||''})}else if(name){cards.find(c=>c.n===n).name=name}};
+    (o.c||[]).forEach(r=>add(r[0],String(r[1]||'')));
+    const seqs=(o.s||[]).map((r,i)=>({id:'s'+Date.now()+i,memo:String(r[0]||''),pats:(r[1]||[]).map(p=>({name:String(p[0]||''),nums:toks(p[1]||'')}))}));
+    seqs.forEach(s=>s.pats.forEach(p=>p.nums.forEach(n=>add(n,''))));
+    const ok=()=>{db={cards,seqs};save();renderSeq();renderCards();toast('共有データを読み込みました')};
+    if(db.cards.length||db.seqs.length){ask('この端末のデータが共有データで置き換わります。よろしいですか？',ok,'読み込む')}else ok();
+  }catch(e){toast('共有データの読み込みに失敗しました')}
+}
+
+// ---- 表示 ----
+function tab(i){document.querySelectorAll('nav button').forEach((b,k)=>b.classList.toggle('on',k===i));document.querySelectorAll('.tab').forEach((t,k)=>t.classList.toggle('on',k===i));i?renderCards():renderSeq()}
+function clearQ(){$('q').value='';renderSeq()}
+function addToQ(n){const q=$('q');q.value=(q.value.trim()+' '+n).trim()+' ';renderSeq();q.focus()}
+
+function row(i,n,cls,tag){
+  return `<div class="cr ${cls||''}"><span class="ix">${i+1}</span><span class="num">${esc(n)}</span><span class="nm">${esc(nameOf(n))}</span>${tag?`<span class="tag">${tag}</span>`:''}</div>`;
+}
+
+function findPos(nums,t){
+  const k=t.length,res=[];
+  for(let i=0;i+k<=nums.length;i++){
+    let ok=true;
+    for(let j=0;j<k;j++){
+      if(j<k-1?nums[i+j]!==t[j]:!nums[i+j].startsWith(t[j])){ok=false;break}
     }
+    if(ok)res.push(i);
+  }
+  return res;
+}
 
-    function saveData() {
-      try {
-        localStorage.setItem('aikatsu_db', JSON.stringify(db));
-        localStorage.setItem('aikatsu_assets', JSON.stringify(assets));
-      } catch (e) {
-        showToast('保存容量がいっぱいです。画像を減らしてください');
+function renderSeq(){
+  const t=toks($('q').value),box=$('seqList');
+  let h='',hits=0;
+  db.seqs.forEach(s=>{
+    let ph='';
+    s.pats.forEach(p=>{
+      if(!t.length){
+        ph+=`<div class="pat"><b>${esc(p.name)}</b>（${p.nums.length}枚）<div style="background:var(--card);border-radius:6px;margin-top:4px">${p.nums.map((n,i)=>row(i,n)).join('')||'<div class="dots">カードなし</div>'}</div></div>`;
+        return;
       }
-    }
-
-    function showToast(msg) {
-      const t = id('toast');
-      t.textContent = msg || '共有URLをコピーしました！';
-      t.style.display = 'block';
-      clearTimeout(toastTimer);
-      toastTimer = setTimeout(() => { t.style.display = 'none'; }, 3000);
-    }
-
-    // ---- 圧縮・エンコード（URL短縮） ----
-    function bytesToB64url(bytes) {
-      let bin = '';
-      const CH = 0x8000;
-      for (let i = 0; i < bytes.length; i += CH) {
-        bin += String.fromCharCode.apply(null, bytes.subarray(i, i + CH));
-      }
-      return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-    }
-
-    function b64urlToBytes(s) {
-      s = s.replace(/-/g, '+').replace(/_/g, '/');
-      while (s.length % 4) s += '=';
-      const bin = atob(s);
-      const bytes = new Uint8Array(bin.length);
-      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-      return bytes;
-    }
-
-    async function pipeBytes(bytes, transform) {
-      const out = new Blob([bytes]).stream().pipeThrough(transform);
-      return new Uint8Array(await new Response(out).arrayBuffer());
-    }
-
-    async function packString(str) {
-      const raw = new TextEncoder().encode(str);
-      if (window.CompressionStream) {
-        return 'z' + bytesToB64url(await pipeBytes(raw, new CompressionStream('deflate-raw')));
-      }
-      return 'j' + bytesToB64url(raw);
-    }
-
-    async function unpackString(s) {
-      const type = s[0];
-      const bytes = b64urlToBytes(s.slice(1));
-      if (type === 'z') {
-        return new TextDecoder().decode(await pipeBytes(bytes, new DecompressionStream('deflate-raw')));
-      }
-      return new TextDecoder().decode(bytes);
-    }
-
-    // ---- ID短縮（card_1730000000000 → ~xxxxxxxx） ----
-    function packId(v, prefix) {
-      const m = String(v).match(new RegExp('^' + prefix + '_(\\d+)$'));
-      return m ? '~' + parseInt(m[1], 10).toString(36) : v;
-    }
-    function unpackId(v, prefix) {
-      v = String(v == null ? '' : v);
-      if (v[0] === '~') {
-        const n = parseInt(v.slice(1), 36);
-        return isNaN(n) ? '' : prefix + '_' + n;
-      }
-      return v;
-    }
-
-    // ---- 共有用サムネ作成（WebP優先・非対応ならJPEG） ----
-    const THUMB_LEVELS = [
-      { d: 96, q: 0.5 },
-      { d: 72, q: 0.45 },
-      { d: 56, q: 0.4 },
-      { d: 44, q: 0.35 }
-    ];
-    const URL_TARGET = 6000; // この文字数以内に収まる最大の画質を自動で選ぶ
-
-    function loadImg(src) {
-      return new Promise(resolve => {
-        const img = new Image();
-        img.onload = () => resolve(img);
-        img.onerror = () => resolve(null);
-        img.src = src;
-      });
-    }
-
-    function makeThumbFromImg(img, maxDim, q) {
-      let w = img.width, h = img.height;
-      if (w >= h) { if (w > maxDim) { h = Math.max(1, Math.round(h * maxDim / w)); w = maxDim; } }
-      else { if (h > maxDim) { w = Math.max(1, Math.round(w * maxDim / h)); h = maxDim; } }
-      const canvas = document.createElement('canvas');
-      canvas.width = w; canvas.height = h;
-      const ctx = canvas.getContext('2d');
-      ctx.fillStyle = '#fff';
-      ctx.fillRect(0, 0, w, h);
-      ctx.drawImage(img, 0, 0, w, h);
-      let url = canvas.toDataURL('image/webp', q);
-      if (!url.startsWith('data:image/webp')) url = canvas.toDataURL('image/jpeg', q);
-      return url.replace(/^data:image\/(jpeg|webp);base64,/, '');
-    }
-
-    // ---- 共有データ作成（短いキー＋カードは番号参照） ----
-    function buildCompact(thumbs) {
-      const idx = {};
-      db.cards.forEach((c, i) => { idx[c.id] = i; });
-      const cards = db.cards.map(c => {
-        const row = [packId(c.id, 'card'), c.number, c.name];
-        if (thumbs && thumbs[c.id]) row.push(thumbs[c.id]);
-        return row;
-      });
-      const seqs = db.sequences.map(s => [
-        packId(s.id, 'seq'),
-        s.memo || '',
-        s.patterns.map(p => [p.name, p.cardIds.map(x => idx[x]).filter(x => x !== undefined)])
-      ]);
-      return JSON.stringify({ v: 3, c: cards, s: seqs });
-    }
-
-    async function shareDataUrl(withImages) {
-      try {
-        showToast('URLを作成中...');
-        const base = location.href.split(/[?#]/)[0];
-        let shareUrl = '';
-        let note = '';
-
-        if (!withImages) {
-          shareUrl = base + '?s=' + await packString(buildCompact(null));
-          note = `（${shareUrl.length}文字）`;
-        } else {
-          const imgs = {};
-          for (const c of db.cards) {
-            if (assets[c.id]) {
-              const im = await loadImg(assets[c.id]);
-              if (im) imgs[c.id] = im;
-            }
-          }
-          let used = 0;
-          for (let i = 0; i < THUMB_LEVELS.length; i++) {
-            const L = THUMB_LEVELS[i];
-            const thumbs = {};
-            for (const cid in imgs) thumbs[cid] = makeThumbFromImg(imgs[cid], L.d, L.q);
-            shareUrl = base + '?s=' + await packString(buildCompact(thumbs));
-            used = i;
-            if (shareUrl.length <= URL_TARGET) break;
-          }
-          note = `（画像付き・${shareUrl.length}文字・画質${used + 1}/${THUMB_LEVELS.length}）`;
+      const pos=findPos(p.nums,t);
+      pos.forEach(i=>{
+        hits++;
+        const k=t.length,end=i+k,from=Math.max(0,i-2),to=Math.min(p.nums.length,end+6);
+        let r='';
+        if(from>0)r+='<div class="dots">⋮</div>';
+        for(let x=from;x<to;x++){
+          r+=row(x,p.nums[x],x<end?(x>=i?'hit':''):(x===end?'nx':''),x===end?'次':'');
         }
-
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          await navigator.clipboard.writeText(shareUrl);
-          showToast('共有URLをコピーしました！' + note);
-        } else {
-          prompt('以下のURLをコピーしてください', shareUrl);
-        }
-      } catch (e) {
-        console.error(e);
-        showToast('共有URLの作成に失敗しました');
-      }
-    }
-
-    // ---- 共有データの取り込み ----
-    function importCompact(obj) {
-      const cards = [];
-      const newAssets = {};
-      (obj.c || []).forEach((r, i) => {
-        const cid = safeId(unpackId(r[0], 'card')) || ('card_' + Date.now() + '_' + i);
-        cards.push({ id: cid, number: String(r[1] || ''), name: String(r[2] || '') });
-        if (r[3]) {
-          const b = String(r[3]).replace(/[^A-Za-z0-9+\/=]/g, '');
-          if (b) {
-            const mime = b.startsWith('UklG') ? 'image/webp' : 'image/jpeg';
-            newAssets[cid] = 'data:' + mime + ';base64,' + b;
-          }
-        }
+        if(to<p.nums.length)r+='<div class="dots">⋮</div>';
+        const nx=p.nums[end];
+        ph+=`<div class="pat"><b>${esc(p.name)}</b>（${end}枚目まで一致 / 全${p.nums.length}枚）<div style="background:var(--card);border-radius:6px;margin-top:4px">${r}</div>${nx?`<button class="btn sm" style="margin-top:6px" onclick="addToQ('${esc(nx)}')">次が出た：${esc(nx)} を追加</button>`:'<div class="info">この配列はここで終わりです</div>'}</div>`;
       });
-      const sequences = (obj.s || []).map((r, i) => ({
-        id: safeId(unpackId(r[0], 'seq')) || ('seq_' + Date.now() + '_' + i),
-        memo: String(r[1] || ''),
-        patterns: (r[2] || []).map(p => ({
-          name: String(p[0] || ''),
-          cardIds: (p[1] || []).map(n => cards[n] && cards[n].id).filter(Boolean)
-        }))
-      }));
-      return { db: { cards, sequences }, newAssets };
-    }
-
-    // 旧形式（?data=...）のリンクも読めるようにする
-    function importLegacy(old) {
-      const cards = (old.cards || []).map(c => ({ id: safeId(c.id), number: String(c.number || ''), name: String(c.name || '') }));
-      const sequences = (old.sequences || []).map(s => ({
-        id: safeId(s.id),
-        memo: String(s.memo || ''),
-        patterns: (s.patterns || []).map(p => ({ name: String(p.name || ''), cardIds: (p.cardIds || []).map(safeId) }))
-      }));
-      return { db: { cards, sequences }, newAssets: {} };
-    }
-
-    async function initData() {
-      loadLocal();
-      const params = new URLSearchParams(location.search);
-      const s = params.get('s');
-      const legacy = params.get('data');
-      if (!s && !legacy) return;
-
-      let incoming = null;
-      try {
-        if (s) incoming = importCompact(JSON.parse(await unpackString(s)));
-        else incoming = importLegacy(JSON.parse(decodeURIComponent(escape(atob(legacy)))));
-      } catch (e) {
-        console.error('データ読み込み失敗', e);
-        showToast('共有データの読み込みに失敗しました');
-      }
-      history.replaceState({}, document.title, location.pathname);
-      if (!incoming) return;
-
-      const apply = () => {
-        const merged = {};
-        incoming.db.cards.forEach(c => {
-          // 自分の端末の画像は消さない。なければ共有の画像を使う
-          if (assets[c.id]) merged[c.id] = assets[c.id];
-          else if (incoming.newAssets[c.id]) merged[c.id] = incoming.newAssets[c.id];
-        });
-        db = incoming.db;
-        assets = merged;
-        saveData();
-        renderSequences();
-        renderCards();
-        showToast('共有データを読み込みました');
-      };
-
-      if (db.cards.length || db.sequences.length) {
-        showConfirm('共有データの読み込み', 'この端末の既存データが共有データで置き換わります。よろしいですか？', apply, '読み込む');
-      } else {
-        apply();
-      }
-    }
-
-    // ---- テーマ ----
-    const themeBtn = id('themeToggleBtn');
-    themeBtn.addEventListener('click', () => {
-      const isDark = document.body.getAttribute('data-theme') === 'dark';
-      document.body.setAttribute('data-theme', isDark ? 'light' : 'dark');
-      themeBtn.textContent = isDark ? 'ダークモード' : 'ライトモード';
     });
+    if(ph)h+=`<div class="box"><div class="row" style="justify-content:space-between"><strong style="font-size:13px">${esc(s.memo)||'排出配列メモ'}</strong><span style="white-space:nowrap"><button class="btn sm" onclick="openSeq('${s.id}')">編集</button> <button class="btn sm r" onclick="delSeq('${s.id}')">削除</button></span></div>${ph}</div>`;
+  });
+  box.innerHTML=h||(t.length?'<div class="info" style="text-align:center;margin-top:16px">一致する配列はありません</div>':'<div class="info" style="text-align:center;margin-top:16px">配列が未登録です</div>');
+  $('qinfo').textContent=t.length?`入力 ${t.length}枚 → 一致 ${hits}件`:'カード番号をスペース区切りで順に入れると、一致する配列と「次のカード」が出ます。';
+}
 
-    function normalizeText(str) {
-      if (!str) return '';
-      return str.normalize('NFKC').toLowerCase().replace(/[\u3041-\u3096]/g, m => String.fromCharCode(m.charCodeAt(0) + 0x60));
-    }
+function renderCards(){
+  const q=norm($('cq').value);
+  const l=db.cards.filter(c=>norm(c.n).includes(q)||norm(c.name).includes(q));
+  $('cardList').innerHTML=l.map(c=>`<div class="cr"><span class="num">${esc(c.n)}</span><input value="${esc(c.name)}" placeholder="カード名" onchange="renameCard('${esc(c.n)}',this.value)" style="padding:5px 8px;font-size:13px"><button class="btn sm r" onclick="delCard('${esc(c.n)}')">×</button></div>`).join('')||'<div class="dots" style="padding:14px">カードがありません</div>';
+}
+function renameCard(n,v){const c=db.cards.find(c=>c.n===n);if(c){c.name=v.trim();save()}}
+function cmClose(){$('cm').style.display='none'}
+function ask(msg,cb,label){$('cmsg').textContent=msg;$('cok').textContent=label||'削除する';$('cok').onclick=()=>{cmClose();cb()};$('cm').style.display='flex'}
+function delCard(n){ask(n+' を削除しますか？（配列内の番号は残ります）',()=>{db.cards=db.cards.filter(c=>c.n!==n);save();renderCards();renderSeq()})}
+function bulkAdd(){
+  $('bulk').value.split('\n').forEach(line=>{
+    const m=line.normalize('NFKC').trim().match(/^(\S+)\s*(.*)$/);if(!m)return;
+    const n=norm(m[1]),c=db.cards.find(c=>c.n===n);
+    if(c){if(m[2])c.name=m[2]}else db.cards.push({n,name:m[2]||''});
+  });
+  $('bulk').value='';save();renderCards();toast('追加しました');
+}
 
-    function switchTab(tab) {
-      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-      if (tab === 'sequence') {
-        document.querySelectorAll('.tab-btn')[0].classList.add('active');
-        id('sequenceTab').classList.add('active');
-        renderSequences();
-      } else {
-        document.querySelectorAll('.tab-btn')[1].classList.add('active');
-        id('cardsTab').classList.add('active');
-        renderCards();
-      }
-    }
+// ---- 配列編集 ----
+function openSeq(sid){
+  const s=sid&&db.seqs.find(x=>x.id===sid);
+  $('sid').value=s?s.id:'';$('smemo').value=s?s.memo:'';
+  editPats=s?s.pats.map(p=>({name:p.name,txt:p.nums.join(' ')})):[{name:'1通り目',txt:''}];
+  drawPats();$('sm').style.display='flex';
+}
+function closeSeq(){$('sm').style.display='none'}
+function drawPats(){
+  $('pats').innerHTML=editPats.map((p,i)=>`<div class="box" style="margin-top:8px"><div class="row" style="margin-bottom:6px"><input value="${esc(p.name)}" oninput="editPats[${i}].name=this.value"><button class="btn sm r" onclick="editPats.splice(${i},1);drawPats()">削除</button></div><textarea rows="4" placeholder="01-01 03-02 05-01 ..." oninput="editPats[${i}].txt=this.value">${esc(p.txt)}</textarea></div>`).join('');
+}
+function addPat(){editPats.push({name:(editPats.length+1)+'通り目',txt:''});drawPats()}
+function saveSeq(){
+  const pats=editPats.map(p=>({name:p.name.trim()||'無題',nums:toks(p.txt)}));
+  pats.forEach(p=>p.nums.forEach(n=>{if(!db.cards.find(c=>c.n===n))db.cards.push({n,name:''})}));
+  const sid=$('sid').value||'s'+Date.now();
+  const d={id:sid,memo:$('smemo').value.trim(),pats};
+  const i=db.seqs.findIndex(s=>s.id===sid);
+  if(i>=0)db.seqs[i]=d;else db.seqs.push(d);
+  save();closeSeq();renderSeq();
+}
+function delSeq(sid){ask('この配列を削除しますか？',()=>{db.seqs=db.seqs.filter(s=>s.id!==sid);save();renderSeq()})}
 
-    function showConfirm(title, msg, onOk, okLabel) {
-      id('confirmTitle').textContent = title;
-      id('confirmMessage').textContent = msg;
-      id('confirmOkBtn').textContent = okLabel || '削除する';
-      id('confirmOkBtn').onclick = () => { onOk(); closeConfirmModal(); };
-      id('confirmModal').style.display = 'flex';
-    }
+$('themeBtn').onclick=()=>{const d=document.body.dataset.theme==='dark';document.body.dataset.theme=d?'light':'dark';$('themeBtn').textContent=d?'ダーク':'ライト'};
 
-    function closeConfirmModal() { id('confirmModal').style.display = 'none'; }
-    function closeModal(modalId) { id(modalId).style.display = 'none'; }
-
-    // ---- カード ----
-    function handleImageUpload(e) {
-      const file = e.target.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = function(evt) {
-        const img = new Image();
-        img.onload = function() {
-          const canvas = document.createElement('canvas');
-          let width = img.width, height = img.height;
-          const maxDim = 800;
-          if (width > height && width > maxDim) {
-            height = Math.round((height * maxDim) / width); width = maxDim;
-          } else if (height > maxDim) {
-            width = Math.round((width * maxDim) / height); height = maxDim;
-          }
-          canvas.width = width; canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0, width, height);
-          tempImageBase64 = canvas.toDataURL('image/jpeg', 0.75);
-          id('cardPhotoPreview').innerHTML = `<img src="${tempImageBase64}" style="max-height:100px; border-radius:6px; margin-top:8px;">`;
-        };
-        img.src = evt.target.result;
-      };
-      reader.readAsDataURL(file);
-    }
-
-    function openCardModal(card = null) {
-      tempImageBase64 = null;
-      id('cardForm').reset();
-      id('cardPhotoPreview').innerHTML = '';
-      if (card) {
-        id('cardModalTitle').textContent = 'カード編集';
-        id('cardId').value = card.id;
-        id('cardNumberInput').value = card.number;
-        id('cardNameInput').value = card.name;
-        if (assets[card.id]) {
-          id('cardPhotoPreview').innerHTML = `<img src="${assets[card.id]}" style="max-height:100px; border-radius:6px; margin-top:8px;">`;
-        }
-      } else {
-        id('cardModalTitle').textContent = 'カード登録';
-        id('cardId').value = '';
-      }
-      id('cardModal').style.display = 'flex';
-    }
-
-    function openCardById(cardId) {
-      const card = db.cards.find(c => c.id === cardId);
-      if (card) openCardModal(card);
-    }
-
-    function saveCard(e) {
-      e.preventDefault();
-      const cardId = id('cardId').value || 'card_' + Date.now();
-      const number = id('cardNumberInput').value.trim();
-      const name = id('cardNameInput').value.trim();
-      if (tempImageBase64) { assets[cardId] = tempImageBase64; }
-
-      const existingIndex = db.cards.findIndex(c => c.id === cardId);
-      const cardData = { id: cardId, number, name };
-      if (existingIndex >= 0) { db.cards[existingIndex] = cardData; } else { db.cards.push(cardData); }
-
-      saveData();
-      closeModal('cardModal');
-      renderCards();
-      if (activePatternIndexForSelect !== null) renderSelectCardList();
-    }
-
-    function deleteCard(cardId) {
-      showConfirm('カード削除', 'このカードを削除しますか？', () => {
-        db.cards = db.cards.filter(c => c.id !== cardId);
-        delete assets[cardId];
-        db.sequences.forEach(seq => {
-          seq.patterns.forEach(pat => { pat.cardIds = pat.cardIds.filter(cid => cid !== cardId); });
-        });
-        saveData();
-        renderCards();
-      });
-    }
-
-    function renderCards() {
-      const query = normalizeText(id('cardSearchInput').value);
-      const list = id('cardList');
-      list.innerHTML = '';
-      const filtered = db.cards.filter(c => normalizeText(c.name).includes(query) || normalizeText(c.number).includes(query));
-
-      filtered.forEach(c => {
-        const imgSrc = assets[c.id] || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="133" viewBox="0 0 100 133"><rect width="100%" height="100%" fill="%23ccc"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="%23666" font-size="12">No Image</text></svg>';
-        const div = document.createElement('div');
-        div.className = 'card-item';
-        div.style.textAlign = 'center';
-
-        div.innerHTML = `
-          <img src="${imgSrc}" class="card-thumb" onclick="openCardDetail('${c.id}')" style="cursor:pointer">
-          <div style="font-weight:bold; font-size:12px; margin-top:6px;" class="ellipsis">${esc(c.number)}</div>
-          <div style="font-size:12px; margin-bottom:8px;" class="ellipsis">${esc(c.name)}</div>
-          <div style="display:flex; gap:4px; justify-content:center;">
-            <button class="btn btn-sm" onclick="openCardById('${c.id}')">編集</button>
-            <button class="btn btn-sm btn-danger" onclick="deleteCard('${c.id}')">削除</button>
-          </div>
-        `;
-        list.appendChild(div);
-      });
-    }
-
-    function openCardDetail(cardId) {
-      const card = db.cards.find(c => c.id === cardId);
-      if (!card) return;
-      id('detailCardName').textContent = card.name;
-      const imgSrc = assets[card.id] || '';
-      id('detailCardInfo').innerHTML = `
-        ${imgSrc ? `<img src="${imgSrc}" style="width:100px; border-radius:6px; display:block; margin:0 auto 8px;">` : ''}
-        <div style="text-align:center;"><strong>カード番号:</strong> ${esc(card.number)}</div>
-      `;
-
-      const history = [];
-      db.sequences.forEach(seq => {
-        seq.patterns.forEach(pat => {
-          pat.cardIds.forEach((cId, idx) => {
-            if (cId === cardId) {
-              history.push({ patternName: pat.name, order: idx + 1, memo: seq.memo });
-            }
-          });
-        });
-      });
-
-      const histList = id('detailHistoryList');
-      histList.innerHTML = '';
-      if (history.length === 0) {
-        histList.innerHTML = '<div style="font-size:12px; color:var(--text-sub); text-align:center;">排出履歴はありません。</div>';
-      } else {
-        history.forEach(h => {
-          const div = document.createElement('div');
-          div.style.fontSize = '12px'; div.style.padding = '6px'; div.style.borderBottom = '1px solid var(--border-color)';
-          div.innerHTML = `${esc(h.patternName)} の <strong>${h.order}枚目</strong>に排出 ${h.memo ? `<br><span style="color:var(--text-sub);">${esc(h.memo)}</span>` : ''}`;
-          histList.appendChild(div);
-        });
-      }
-      id('cardDetailModal').style.display = 'flex';
-    }
-
-    // ---- 配列 ----
-    function openSequenceModal(seq = null) {
-      id('seqForm').reset();
-      if (seq) {
-        id('seqModalTitle').textContent = '配列編集';
-        id('seqId').value = seq.id;
-        id('seqMemo').value = seq.memo || '';
-        tempPatterns = JSON.parse(JSON.stringify(seq.patterns));
-      } else {
-        id('seqModalTitle').textContent = '配列登録';
-        id('seqId').value = '';
-        tempPatterns = [ { name: '1通り目', cardIds: [] } ];
-      }
-      renderTempPatterns();
-      id('sequenceModal').style.display = 'flex';
-    }
-
-    function openSequenceById(seqId) {
-      const seq = db.sequences.find(s => s.id === seqId);
-      if (seq) openSequenceModal(seq);
-    }
-
-    function addPatternToSeqModal() {
-      tempPatterns.push({ name: `${tempPatterns.length + 1}通り目`, cardIds: [] });
-      renderTempPatterns();
-    }
-
-    function renderTempPatterns() {
-      const container = id('seqPatternsContainer');
-      container.innerHTML = '';
-      tempPatterns.forEach((pat, pIdx) => {
-        const pDiv = document.createElement('div');
-        pDiv.style.background = 'var(--input-bg)'; pDiv.style.border = '1px solid var(--border-color)';
-        pDiv.style.borderRadius = '8px'; pDiv.style.padding = '10px'; pDiv.style.marginBottom = '12px';
-
-        let cardsHtml = pat.cardIds.map((cId, cIdx) => {
-          const card = db.cards.find(c => c.id === cId);
-          const name = card ? `${card.number} ${card.name}` : '不明なカード';
-          return `
-            <div class="seq-card-row">
-              <span class="badge">${cIdx + 1}</span>
-              <span style="flex:1;" class="ellipsis">${esc(name)}</span>
-              <button type="button" class="btn btn-sm btn-secondary" onclick="moveSeqCard(${pIdx}, ${cIdx}, -1)">↑</button>
-              <button type="button" class="btn btn-sm btn-secondary" onclick="moveSeqCard(${pIdx}, ${cIdx}, 1)">↓</button>
-              <button type="button" class="btn btn-sm btn-danger" onclick="removeSeqCard(${pIdx}, ${cIdx})">×</button>
-            </div>
-          `;
-        }).join('');
-
-        pDiv.innerHTML = `
-          <div style="display:flex; gap:8px; align-items:center; margin-bottom:8px;">
-            <input type="text" value="${esc(pat.name)}" onchange="tempPatterns[${pIdx}].name=this.value" style="margin:0; font-weight:bold;">
-            <button type="button" class="btn btn-sm btn-danger" onclick="removePattern(${pIdx})">削除</button>
-          </div>
-          <div class="seq-card-list">${cardsHtml}</div>
-          <button type="button" class="btn btn-sm" style="margin-top:8px;" onclick="openSelectCardModal(${pIdx})">＋ カードを追加</button>
-        `;
-        container.appendChild(pDiv);
-      });
-    }
-
-    function removePattern(pIdx) { tempPatterns.splice(pIdx, 1); renderTempPatterns(); }
-
-    function moveSeqCard(pIdx, cIdx, dir) {
-      const targetIdx = cIdx + dir;
-      if (targetIdx < 0 || targetIdx >= tempPatterns[pIdx].cardIds.length) return;
-      const arr = tempPatterns[pIdx].cardIds;
-      const temp = arr[cIdx]; arr[cIdx] = arr[targetIdx]; arr[targetIdx] = temp;
-      renderTempPatterns();
-    }
-
-    function removeSeqCard(pIdx, cIdx) { tempPatterns[pIdx].cardIds.splice(cIdx, 1); renderTempPatterns(); }
-
-    function openSelectCardModal(pIdx) {
-      activePatternIndexForSelect = pIdx;
-      id('selectCardSearch').value = '';
-      renderSelectCardList();
-      id('selectCardModal').style.display = 'flex';
-    }
-
-    function openCardModalFromSelect() { openCardModal(); }
-
-    function renderSelectCardList() {
-      const query = normalizeText(id('selectCardSearch').value);
-      const container = id('selectCardList');
-      container.innerHTML = '';
-      const filtered = db.cards.filter(c => normalizeText(c.name).includes(query) || normalizeText(c.number).includes(query));
-
-      filtered.forEach(c => {
-        const div = document.createElement('div');
-        div.className = 'seq-card-row'; div.style.cursor = 'pointer';
-        div.onclick = () => {
-          if (activePatternIndexForSelect !== null) {
-            tempPatterns[activePatternIndexForSelect].cardIds.push(c.id);
-            renderTempPatterns();
-            closeModal('selectCardModal');
-          }
-        };
-        div.innerHTML = `
-          <div style="font-weight:bold;">${esc(c.number)}</div>
-          <div style="flex:1;" class="ellipsis">${esc(c.name)}</div>
-        `;
-        container.appendChild(div);
-      });
-    }
-
-    function saveSequence(e) {
-      e.preventDefault();
-      const seqId = id('seqId').value || 'seq_' + Date.now();
-      const memo = id('seqMemo').value.trim();
-
-      const seqData = { id: seqId, memo, patterns: tempPatterns };
-      const existingIndex = db.sequences.findIndex(s => s.id === seqId);
-      if (existingIndex >= 0) { db.sequences[existingIndex] = seqData; } else { db.sequences.push(seqData); }
-
-      saveData();
-      closeModal('sequenceModal');
-      renderSequences();
-    }
-
-    function deleteSequence(seqId) {
-      showConfirm('配列削除', 'この配列記録を削除しますか？', () => {
-        db.sequences = db.sequences.filter(s => s.id !== seqId);
-        saveData();
-        renderSequences();
-      });
-    }
-
-    function renderSequences() {
-      const query = normalizeText(id('seqSearchInput').value);
-      const list = id('sequenceList');
-      list.innerHTML = '';
-
-      const filtered = db.sequences.filter(seq => {
-        if (seq.memo && normalizeText(seq.memo).includes(query)) return true;
-        return seq.patterns.some(pat =>
-          pat.cardIds.some(cId => {
-            const card = db.cards.find(c => c.id === cId);
-            return card && (normalizeText(card.name).includes(query) || normalizeText(card.number).includes(query));
-          })
-        );
-      });
-
-      filtered.forEach(seq => {
-        const div = document.createElement('div');
-        div.className = 'sequence-item';
-
-        let patternsHtml = seq.patterns.map(pat => {
-          let cardChips = pat.cardIds.map((cId, idx) => {
-            const card = db.cards.find(c => c.id === cId);
-            const num = card ? card.number : '?';
-            const thumb = (card && assets[card.id]) ? assets[card.id] : '';
-            return `
-              <div style="flex: 0 0 60px; text-align: center; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 6px; padding: 4px;">
-                ${thumb ? `<img src="${thumb}" style="width: 45px; height: 60px; object-fit: cover; border-radius: 4px; display: block; margin: 0 auto 2px;">` : `<div style="width: 45px; height: 60px; background: var(--border-color); border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 9px; color: var(--text-sub); margin: 0 auto 2px;">NoImg</div>`}
-                <div style="font-size: 10px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${idx + 1}.</div>
-                <div style="font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${esc(num)}</div>
-              </div>
-            `;
-          }).join('');
-
-          return `
-            <div style="margin-top: 8px; background: var(--accent-bg); padding: 8px; border-radius: 6px;">
-              <strong style="font-size: 12px; display: block; margin-bottom: 4px; color: var(--primary);">${esc(pat.name)}</strong>
-              <div style="display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px;">
-                ${cardChips || '<div style="font-size: 11px; color: var(--text-sub);">カードなし</div>'}
-              </div>
-            </div>
-          `;
-        }).join('');
-
-        div.innerHTML = `
-          <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-            <div>
-              <strong style="font-size:14px;">排出配列メモ</strong>
-            </div>
-            <div>
-              <button class="btn btn-sm" onclick="openSequenceById('${seq.id}')">編集</button>
-              <button class="btn btn-sm btn-danger" onclick="deleteSequence('${seq.id}')">削除</button>
-            </div>
-          </div>
-          ${seq.memo ? `<div style="font-size:12px; margin-top:6px; color:var(--text-sub);">${esc(seq.memo)}</div>` : ''}
-          ${patternsHtml}
-        `;
-        list.appendChild(div);
-      });
-    }
-
-    // ---- 起動 ----
-    loadLocal();
-    renderSequences();
-    initData();
-  </script>
+load();renderSeq();initShared();
+</script>
 </body>
 </html>
