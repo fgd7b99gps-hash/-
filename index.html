@@ -58,10 +58,12 @@
     .btn-danger { background-color: #f44336; }
     .btn-sm { padding: 4px 8px; font-size: 12px; border-radius: 4px; }
     .btn-block { width: 100%; }
+    .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 10px; margin-top: 16px; }
     .card-item, .sequence-item {
-      background-color: var(--card-bg); border-radius: 8px; padding: 12px; margin-bottom: 12px;
+      background-color: var(--card-bg); border-radius: 8px; padding: 10px; margin-bottom: 12px;
       box-shadow: var(--shadow); border: 1px solid var(--border-color);
     }
+    .card-thumb { width: 100%; aspect-ratio: 3/4; object-fit: cover; border-radius: 6px; background: var(--border-color); }
     input, textarea, select {
       width: 100%; padding: 8px 12px; margin-top: 4px; margin-bottom: 12px;
       border: 1px solid var(--border-color); border-radius: 6px; background-color: var(--input-bg); color: var(--text-color); font-size: 14px;
@@ -114,7 +116,7 @@
         <input type="text" id="cardSearchInput" placeholder="カード名や番号で検索..." oninput="renderCards()">
       </div>
       <button class="btn btn-block" onclick="openCardModal()">＋ 新しいカードを登録</button>
-      <div id="cardList" style="margin-top: 16px; display: flex; flex-direction: column; gap: 8px;"></div>
+      <div id="cardList" class="card-grid"></div>
     </div>
   </div>
 
@@ -127,6 +129,9 @@
         <input type="text" id="cardNumberInput" required placeholder="01-01">
         <label style="font-size: 12px;">カード名</label>
         <input type="text" id="cardNameInput" required placeholder="スターフェスティバルコーデ">
+        <label style="font-size: 12px;">カード画像</label>
+        <input type="file" id="cardImageInput" accept="image/*" onchange="handleImageUpload(event)">
+        <div id="cardPhotoPreview" style="text-align: center;"></div>
         <div style="display: flex; gap: 8px; margin-top: 16px;">
           <button type="button" class="btn btn-secondary" style="flex:1;" onclick="closeModal('cardModal')">キャンセル</button>
           <button type="submit" class="btn" style="flex:1;">保存</button>
@@ -187,9 +192,9 @@
   </div>
 
   <div id="toast" class="toast">共有URLをコピーしました！</div>
-
   <script>
     let db = { cards: [], sequences: [] };
+    let assets = {};
 
     function initData() {
       const params = new URLSearchParams(window.location.search);
@@ -205,15 +210,18 @@
         }
       } else {
         db = JSON.parse(localStorage.getItem('aikatsu_db')) || { cards: [], sequences: [] };
+        assets = JSON.parse(localStorage.getItem('aikatsu_assets')) || {};
       }
     }
 
     initData();
 
+    let tempImageBase64 = null;
     let activePatternIndexForSelect = null;
 
     function saveData() {
       localStorage.setItem('aikatsu_db', JSON.stringify(db));
+      localStorage.setItem('aikatsu_assets', JSON.stringify(assets));
     }
 
     function shareDataUrl() {
@@ -272,13 +280,44 @@
     function closeConfirmModal() { id('confirmModal').style.display = 'none'; }
     function closeModal(modalId) { id(modalId).style.display = 'none'; }
 
+    function handleImageUpload(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        const img = new Image();
+        img.onload = function() {
+          const canvas = document.createElement('canvas');
+          let width = img.width, height = img.height;
+          const maxDim = 800;
+          if (width > height && width > maxDim) {
+            height = Math.round((height * maxDim) / width); width = maxDim;
+          } else if (height > maxDim) {
+            width = Math.round((width * maxDim) / height); height = maxDim;
+          }
+          canvas.width = width; canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          tempImageBase64 = canvas.toDataURL('image/jpeg', 0.75);
+          id('cardPhotoPreview').innerHTML = `<img src="${tempImageBase64}" style="max-height:100px; border-radius:6px; margin-top:8px;">`;
+        };
+        img.src = evt.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
     function openCardModal(card = null) {
+      tempImageBase64 = null;
       id('cardForm').reset();
+      id('cardPhotoPreview').innerHTML = '';
       if (card) {
         id('cardModalTitle').textContent = 'カード編集';
         id('cardId').value = card.id;
         id('cardNumberInput').value = card.number;
         id('cardNameInput').value = card.name;
+        if (assets[card.id]) {
+          id('cardPhotoPreview').innerHTML = `<img src="${assets[card.id]}" style="max-height:100px; border-radius:6px; margin-top:8px;">`;
+        }
       } else {
         id('cardModalTitle').textContent = 'カード登録';
         id('cardId').value = '';
@@ -291,6 +330,7 @@
       const cardId = id('cardId').value || 'card_' + Date.now();
       const number = id('cardNumberInput').value.trim();
       const name = id('cardNameInput').value.trim();
+      if (tempImageBase64) { assets[cardId] = tempImageBase64; }
 
       const existingIndex = db.cards.findIndex(c => c.id === cardId);
       const cardData = { id: cardId, number, name };
@@ -305,6 +345,7 @@
     function deleteCard(cardId) {
       showConfirm('カード削除', 'このカードを削除しますか？', () => {
         db.cards = db.cards.filter(c => c.id !== cardId);
+        delete assets[cardId];
         db.sequences.forEach(seq => {
           seq.patterns.forEach(pat => { pat.cardIds = pat.cardIds.filter(id => id !== cardId); });
         });
@@ -320,18 +361,19 @@
       const filtered = db.cards.filter(c => normalizeText(c.name).includes(query) || normalizeText(c.number).includes(query));
 
       filtered.forEach(c => {
+        const imgSrc = assets[c.id] || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="133" viewBox="0 0 100 133"><rect width="100%" height="100%" fill="%23ccc"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="%23666" font-size="12">No Image</text></svg>';
         const div = document.createElement('div');
         div.className = 'card-item';
-        div.style.display = 'flex';
-        div.style.justifyContent = 'space-between';
-        div.style.alignItems = 'center';
+        div.style.textAlign = 'center';
+        
+        const cardJsonStr = JSON.stringify(c).replace(/'/g, "&#39;");
+
         div.innerHTML = `
-          <div onclick="openCardDetail('${c.id}')" style="cursor:pointer; flex:1; overflow:hidden; padding-right:8px;">
-            <div style="font-weight:bold; font-size:12px; color:var(--primary);">${c.number}</div>
-            <div style="font-size:13px;" class="ellipsis">${c.name}</div>
-          </div>
-          <div style="display:flex; gap:4px; flex-shrink:0;">
-            <button class="btn btn-sm" onclick='openCardModal(${JSON.stringify(c).replace(/'/g, "&#39;")})'>編集</button>
+          <img src="${imgSrc}" class="card-thumb" onclick="openCardDetail('${c.id}')" style="cursor:pointer">
+          <div style="font-weight:bold; font-size:12px; margin-top:6px;" class="ellipsis">${c.number}</div>
+          <div style="font-size:12px; margin-bottom:8px;" class="ellipsis">${c.name}</div>
+          <div style="display:flex; gap:4px; justify-content:center;">
+            <button class="btn btn-sm" onclick='openCardModal(${cardJsonStr})'>編集</button>
             <button class="btn btn-sm btn-danger" onclick="deleteCard('${c.id}')">削除</button>
           </div>
         `;
@@ -343,7 +385,11 @@
       const card = db.cards.find(c => c.id === cardId);
       if (!card) return;
       id('detailCardName').textContent = card.name;
-      id('detailCardInfo').innerHTML = `<div><strong>カード番号:</strong> ${card.number}</div>`;
+      const imgSrc = assets[card.id] || '';
+      id('detailCardInfo').innerHTML = `
+        ${imgSrc ? `<img src="${imgSrc}" style="width:100px; border-radius:6px; display:block; margin:0 auto 8px;">` : ''}
+        <div style="text-align:center;"><strong>カード番号:</strong> ${card.number}</div>
+      `;
 
       const history = [];
       db.sequences.forEach(seq => {
@@ -359,7 +405,7 @@
       const histList = id('detailHistoryList');
       histList.innerHTML = '';
       if (history.length === 0) {
-        histList.innerHTML = '<div style="font-size:12px; color:var(--text-sub);">排出履歴はありません。</div>';
+        histList.innerHTML = '<div style="font-size:12px; color:var(--text-sub); text-align:center;">排出履歴はありません。</div>';
       } else {
         history.forEach(h => {
           const div = document.createElement('div');
@@ -368,9 +414,8 @@
           histList.appendChild(div);
         });
       }
-      id('detailCardModal').style.display = 'flex';
+      id('cardDetailModal').style.display = 'flex';
     }
-
     let tempPatterns = [];
 
     function openSequenceModal(seq = null) {
@@ -515,28 +560,30 @@
         div.className = 'sequence-item';
 
         let patternsHtml = seq.patterns.map(pat => {
-          let cardRows = pat.cardIds.map((cId, idx) => {
+          let cardChips = pat.cardIds.map((cId, idx) => {
             const card = db.cards.find(c => c.id === cId);
             const num = card ? card.number : '?';
-            const name = card ? card.name : '不明なカード';
+            const thumb = (card && assets[card.id]) ? assets[card.id] : '';
             return `
-              <div style="display: flex; align-items: center; gap: 8px; padding: 4px 0; border-bottom: 1px dashed var(--border-color); font-size: 13px;">
-                <span style="font-size: 11px; color: var(--text-sub); width: 24px; text-align: right;">${idx + 1}.</span>
-                <span style="font-weight: bold; color: var(--primary); min-width: 45px;">${num}</span>
-                <span style="flex: 1;" class="ellipsis">${name}</span>
+              <div style="flex: 0 0 60px; text-align: center; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 6px; padding: 4px;">
+                ${thumb ? `<img src="${thumb}" style="width: 45px; height: 60px; object-fit: cover; border-radius: 4px; display: block; margin: 0 auto 2px;">` : `<div style="width: 45px; height: 60px; background: var(--border-color); border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 9px; color: var(--text-sub); margin: 0 auto 2px;">NoImg</div>`}
+                <div style="font-size: 10px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${idx + 1}.</div>
+                <div style="font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${num}</div>
               </div>
             `;
           }).join('');
 
           return `
-            <div style="margin-top: 8px; background: var(--accent-bg); padding: 10px; border-radius: 6px;">
-              <strong style="font-size: 12px; display: block; margin-bottom: 6px; color: var(--primary);">${pat.name}</strong>
-              <div style="display: flex; flex-direction: column;">
-                ${cardRows || '<div style="font-size: 11px; color: var(--text-sub);">カードなし</div>'}
+            <div style="margin-top: 8px; background: var(--accent-bg); padding: 8px; border-radius: 6px;">
+              <strong style="font-size: 12px; display: block; margin-bottom: 4px; color: var(--primary);">${pat.name}</strong>
+              <div style="display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px;">
+                ${cardChips || '<div style="font-size: 11px; color: var(--text-sub);">カードなし</div>'}
               </div>
             </div>
           `;
         }).join('');
+
+        const seqJsonStr = JSON.stringify(seq).replace(/'/g, "&#39;");
 
         div.innerHTML = `
           <div style="display:flex; justify-content:space-between; align-items:flex-start;">
@@ -544,7 +591,7 @@
               <strong style="font-size:14px;">排出配列メモ</strong>
             </div>
             <div>
-              <button class="btn btn-sm" onclick='openSequenceModal(${JSON.stringify(seq).replace(/'/g, "&#39;")})'>編集</button>
+              <button class="btn btn-sm" onclick='openSequenceModal(${seqJsonStr})'>編集</button>
               <button class="btn btn-sm btn-danger" onclick="deleteSequence('${seq.id}')">削除</button>
             </div>
           </div>
