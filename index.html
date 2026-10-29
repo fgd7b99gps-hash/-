@@ -193,6 +193,7 @@
   </div>
 
   <div id="toast" class="toast"></div>
+
   <script>
     let db = { cards: [], sequences: [] };
     let assets = {};
@@ -231,7 +232,7 @@
       t.textContent = msg || '共有URLをコピーしました！';
       t.style.display = 'block';
       clearTimeout(toastTimer);
-      toastTimer = setTimeout(() => { t.style.display = 'none'; }, 2500);
+      toastTimer = setTimeout(() => { t.style.display = 'none'; }, 3000);
     }
 
     // ---- 圧縮・エンコード（URL短縮） ----
@@ -275,53 +276,99 @@
       return new TextDecoder().decode(bytes);
     }
 
-    // ---- 共有用サムネ作成 ----
-    function makeThumb(dataUrl) {
+    // ---- ID短縮（card_1730000000000 → ~xxxxxxxx） ----
+    function packId(v, prefix) {
+      const m = String(v).match(new RegExp('^' + prefix + '_(\\d+)$'));
+      return m ? '~' + parseInt(m[1], 10).toString(36) : v;
+    }
+    function unpackId(v, prefix) {
+      v = String(v == null ? '' : v);
+      if (v[0] === '~') {
+        const n = parseInt(v.slice(1), 36);
+        return isNaN(n) ? '' : prefix + '_' + n;
+      }
+      return v;
+    }
+
+    // ---- 共有用サムネ作成（WebP優先・非対応ならJPEG） ----
+    const THUMB_LEVELS = [
+      { d: 96, q: 0.5 },
+      { d: 72, q: 0.45 },
+      { d: 56, q: 0.4 },
+      { d: 44, q: 0.35 }
+    ];
+    const URL_TARGET = 6000; // この文字数以内に収まる最大の画質を自動で選ぶ
+
+    function loadImg(src) {
       return new Promise(resolve => {
         const img = new Image();
-        img.onload = () => {
-          const maxDim = 120;
-          let w = img.width, h = img.height;
-          if (w > h) { if (w > maxDim) { h = Math.round(h * maxDim / w); w = maxDim; } }
-          else { if (h > maxDim) { w = Math.round(w * maxDim / h); h = maxDim; } }
-          const canvas = document.createElement('canvas');
-          canvas.width = w; canvas.height = h;
-          canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-          resolve(canvas.toDataURL('image/jpeg', 0.5));
-        };
-        img.onerror = () => resolve('');
-        img.src = dataUrl;
+        img.onload = () => resolve(img);
+        img.onerror = () => resolve(null);
+        img.src = src;
       });
     }
 
+    function makeThumbFromImg(img, maxDim, q) {
+      let w = img.width, h = img.height;
+      if (w >= h) { if (w > maxDim) { h = Math.max(1, Math.round(h * maxDim / w)); w = maxDim; } }
+      else { if (h > maxDim) { w = Math.max(1, Math.round(w * maxDim / h)); h = maxDim; } }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, w, h);
+      ctx.drawImage(img, 0, 0, w, h);
+      let url = canvas.toDataURL('image/webp', q);
+      if (!url.startsWith('data:image/webp')) url = canvas.toDataURL('image/jpeg', q);
+      return url.replace(/^data:image\/(jpeg|webp);base64,/, '');
+    }
+
     // ---- 共有データ作成（短いキー＋カードは番号参照） ----
-    async function buildCompact(withImages) {
+    function buildCompact(thumbs) {
       const idx = {};
       db.cards.forEach((c, i) => { idx[c.id] = i; });
-      const cards = [];
-      for (const c of db.cards) {
-        const row = [c.id, c.number, c.name];
-        if (withImages && assets[c.id]) {
-          const t = await makeThumb(assets[c.id]);
-          if (t) row.push(t.replace(/^data:image\/jpeg;base64,/, ''));
-        }
-        cards.push(row);
-      }
+      const cards = db.cards.map(c => {
+        const row = [packId(c.id, 'card'), c.number, c.name];
+        if (thumbs && thumbs[c.id]) row.push(thumbs[c.id]);
+        return row;
+      });
       const seqs = db.sequences.map(s => [
-        s.id,
+        packId(s.id, 'seq'),
         s.memo || '',
         s.patterns.map(p => [p.name, p.cardIds.map(x => idx[x]).filter(x => x !== undefined)])
       ]);
-      return JSON.stringify({ v: 2, c: cards, s: seqs });
+      return JSON.stringify({ v: 3, c: cards, s: seqs });
     }
 
     async function shareDataUrl(withImages) {
       try {
         showToast('URLを作成中...');
-        const packed = await packString(await buildCompact(withImages));
         const base = location.href.split(/[?#]/)[0];
-        const shareUrl = base + '?s=' + packed;
-        const note = withImages ? `（画像付き・${shareUrl.length}文字）` : `（${shareUrl.length}文字）`;
+        let shareUrl = '';
+        let note = '';
+
+        if (!withImages) {
+          shareUrl = base + '?s=' + await packString(buildCompact(null));
+          note = `（${shareUrl.length}文字）`;
+        } else {
+          const imgs = {};
+          for (const c of db.cards) {
+            if (assets[c.id]) {
+              const im = await loadImg(assets[c.id]);
+              if (im) imgs[c.id] = im;
+            }
+          }
+          let used = 0;
+          for (let i = 0; i < THUMB_LEVELS.length; i++) {
+            const L = THUMB_LEVELS[i];
+            const thumbs = {};
+            for (const cid in imgs) thumbs[cid] = makeThumbFromImg(imgs[cid], L.d, L.q);
+            shareUrl = base + '?s=' + await packString(buildCompact(thumbs));
+            used = i;
+            if (shareUrl.length <= URL_TARGET) break;
+          }
+          note = `（画像付き・${shareUrl.length}文字・画質${used + 1}/${THUMB_LEVELS.length}）`;
+        }
 
         if (navigator.clipboard && navigator.clipboard.writeText) {
           await navigator.clipboard.writeText(shareUrl);
@@ -340,15 +387,18 @@
       const cards = [];
       const newAssets = {};
       (obj.c || []).forEach((r, i) => {
-        const cid = safeId(r[0]) || ('card_' + Date.now() + '_' + i);
+        const cid = safeId(unpackId(r[0], 'card')) || ('card_' + Date.now() + '_' + i);
         cards.push({ id: cid, number: String(r[1] || ''), name: String(r[2] || '') });
         if (r[3]) {
           const b = String(r[3]).replace(/[^A-Za-z0-9+\/=]/g, '');
-          if (b) newAssets[cid] = 'data:image/jpeg;base64,' + b;
+          if (b) {
+            const mime = b.startsWith('UklG') ? 'image/webp' : 'image/jpeg';
+            newAssets[cid] = 'data:' + mime + ';base64,' + b;
+          }
         }
       });
       const sequences = (obj.s || []).map((r, i) => ({
-        id: safeId(r[0]) || ('seq_' + Date.now() + '_' + i),
+        id: safeId(unpackId(r[0], 'seq')) || ('seq_' + Date.now() + '_' + i),
         memo: String(r[1] || ''),
         patterns: (r[2] || []).map(p => ({
           name: String(p[0] || ''),
