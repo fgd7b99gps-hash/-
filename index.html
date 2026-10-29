@@ -28,6 +28,7 @@ textarea{resize:vertical}
 .pat b{font-size:12px;color:var(--pri)}
 .cr{display:flex;gap:8px;align-items:center;padding:7px 8px;border-bottom:1px solid var(--bd);font-size:14px}
 .cr:last-child{border:none}
+#seqList .cr{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 .ix{min-width:26px;text-align:center;background:var(--pri);color:#fff;border-radius:4px;font-size:11px;font-weight:bold;padding:2px 0}
 .num{font-weight:bold;min-width:56px}
 .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--sub);font-size:13px}
@@ -37,6 +38,10 @@ textarea{resize:vertical}
 .cr.pr{border:2px solid #2196f3;border-radius:6px;margin:2px 0}
 .cr.st{border:2px solid #4caf50;border-radius:6px;margin:2px 0}
 .cr.pr.st{box-shadow:0 0 0 2px #4caf50 inset}
+.cr.pu{border:2px solid #9c27b0;border-radius:6px;margin:2px 0}
+.cr.pu.pr{box-shadow:0 0 0 2px #2196f3 inset}
+.cr.pu.st{box-shadow:0 0 0 2px #4caf50 inset}
+.cr.pu.pr.st{box-shadow:0 0 0 2px #2196f3 inset,0 0 0 4px #4caf50 inset}
 .tag{font-size:10px;font-weight:bold;color:#b37a00}
 .dots{text-align:center;color:var(--sub);font-size:12px;padding:2px}
 .info{font-size:12px;color:var(--sub);margin-top:6px}
@@ -61,6 +66,7 @@ textarea{resize:vertical}
   </div>
   <div class="tab" id="t1">
     <input id="cq" placeholder="番号・名前で検索" oninput="renderCards()">
+    <button class="btn" style="width:100%;margin-top:10px" onclick="openCard()">＋ カードを1枚追加</button>
     <div class="box">
       <div style="font-size:12px;color:var(--sub);margin-bottom:6px">まとめて登録（1行に「番号 カード名」）</div>
       <textarea id="bulk" rows="3" placeholder="E1-01 スターフェスティバルコーデ&#10;E1-01PR ○○コーデ"></textarea>
@@ -81,20 +87,30 @@ textarea{resize:vertical}
   <div class="row" style="margin-top:14px"><button class="btn g" style="flex:1" onclick="closeSeq()">キャンセル</button><button class="btn" style="flex:1" onclick="saveSeq()">保存</button></div>
 </div></div>
 
+<div class="modal" id="ecm"><div class="mc" style="max-width:380px">
+  <h3 id="ecTitle" style="color:var(--pri);margin-bottom:10px">カード編集</h3>
+  <input type="hidden" id="ecOld">
+  <div style="font-size:12px">カード番号</div>
+  <input id="ecNum" placeholder="E1-01" style="margin-bottom:8px" autocomplete="off">
+  <div style="font-size:12px">カード名</div>
+  <input id="ecName" placeholder="カード名" autocomplete="off">
+  <div class="row" style="margin-top:14px"><button class="btn g" style="flex:1" onclick="closeCard()">キャンセル</button><button class="btn" style="flex:1" onclick="saveCard()">保存</button></div>
+</div></div>
+
 <div class="modal" id="cm" style="z-index:200"><div class="mc" style="max-width:340px;text-align:center">
   <p id="cmsg" style="font-size:14px;margin-bottom:14px"></p>
   <div class="row"><button class="btn g" style="flex:1" onclick="cmClose()">いいえ</button><button class="btn r" style="flex:1" id="cok">削除する</button></div>
 </div></div>
 <div class="toast" id="toast"></div>
 <script>
-let db={cards:[],seqs:[]}; // cards:[{n,name}] seqs:[{id,memo,pats:[{name,nums:[]}]}]
+let db={cards:[],seqs:[],marks:{}}; // cards:[{n,name}] seqs:[{id,memo,pats:[{name,nums:[]}]}] marks:{"配列ID:パターン番号:位置":カード番号}
 let editPats=[],tt=null;
 const $=i=>document.getElementById(i);
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 const norm=s=>String(s||'').normalize('NFKC').trim().toUpperCase();
 const toks=s=>norm(s).split(/[\s,、]+/).filter(Boolean);
 const nameOf=n=>{const c=db.cards.find(c=>c.n===n);return c?c.name:''};
-const INFO='番号をスペース区切りで順に入れると、一致する配列と「次のカード」が出ます。01だけでE1-01もヒット。番号のあとにスペースで確定。';
+const INFO='番号をスペース区切りで順に入れると、一致する配列と「次のカード」が出ます。01だけでE1-01もヒット。番号のあとにスペースで確定。カードを長押しで、その場所だけ紫枠。';
 
 // ---- 広い検索（E1-01 を 01 や 1 でもヒット） ----
 const SUF=/(PR|[\u2B50\u2605\u2606]\uFE0F?)+$/u;
@@ -107,11 +123,12 @@ function tmatch(n,t,partial){
   return keys(n).some(k=>partial?k.includes(t):k===t);
 }
 
-// ---- 枠（PR=青 / ⭐=緑） ----
-function frame(n){
+// ---- 枠（PR=青 / ⭐=緑 / 長押し=紫：押した場所だけ） ----
+function frame(n,key){
   let c='';
   if(/PR/.test(n))c+=' pr';
   if(/[\u2B50\u2605\u2606]/u.test(n))c+=' st';
+  if(key&&db.marks&&db.marks[key]===n)c+=' pu';
   return c;
 }
 
@@ -119,7 +136,16 @@ function toast(m){const t=$('toast');t.textContent=m;t.style.display='block';cle
 function save(){try{localStorage.setItem('aikatsu_db2',JSON.stringify(db))}catch(e){toast('保存に失敗しました')}}
 
 function load(){
-  try{const d=JSON.parse(localStorage.getItem('aikatsu_db2'));if(d&&d.cards){db=d;return}}catch(e){}
+  try{
+    const d=JSON.parse(localStorage.getItem('aikatsu_db2'));
+    if(d&&d.cards){
+      db=d;
+      if(!db.marks)db.marks={};
+      // 旧仕様（カード単位）の紫枠は破棄
+      Object.keys(db.marks).forEach(k=>{if(k.indexOf(':')<0)delete db.marks[k]});
+      return;
+    }
+  }catch(e){}
   // 旧データから移行（画像は使いません）
   try{
     const o=JSON.parse(localStorage.getItem('aikatsu_db'));
@@ -161,7 +187,7 @@ async function initShared(){
     (o.c||[]).forEach(r=>add(r[0],String(r[1]||'')));
     const seqs=(o.s||[]).map((r,i)=>({id:'s'+Date.now()+i,memo:String(r[0]||''),pats:(r[1]||[]).map(p=>({name:String(p[0]||''),nums:toks(p[1]||'')}))}));
     seqs.forEach(s=>s.pats.forEach(p=>p.nums.forEach(n=>add(n,''))));
-    const ok=()=>{db={cards,seqs};save();renderSeq();renderCards();toast('共有データを読み込みました')};
+    const ok=()=>{db={cards,seqs,marks:{}};save();renderSeq();renderCards();toast('共有データを読み込みました')};
     if(db.cards.length||db.seqs.length){ask('この端末のデータが共有データで置き換わります。よろしいですか？',ok,'読み込む')}else ok();
   }catch(e){toast('共有データの読み込みに失敗しました')}
 }
@@ -171,8 +197,8 @@ function tab(i){document.querySelectorAll('nav button').forEach((b,k)=>b.classLi
 function clearQ(){$('q').value='';renderSeq()}
 function addToQ(n){const q=$('q');q.value=(q.value.trim()+' '+n).trim()+' ';renderSeq();q.focus()}
 
-function row(i,n,cls,tag){
-  return `<div class="cr ${cls||''}${frame(n)}"><span class="ix">${i+1}</span><span class="num">${esc(n)}</span><span class="nm">${esc(nameOf(n))}</span>${tag?`<span class="tag">${tag}</span>`:''}</div>`;
+function row(i,n,cls,tag,key){
+  return `<div class="cr ${cls||''}${frame(n,key)}" data-n="${esc(n)}" data-k="${esc(key||'')}"><span class="ix">${i+1}</span><span class="num">${esc(n)}</span><span class="nm">${esc(nameOf(n))}</span>${tag?`<span class="tag">${tag}</span>`:''}</div>`;
 }
 
 function findPos(nums,t,exLast){
@@ -195,9 +221,10 @@ function renderSeq(){
   let h='',hits=0;
   db.seqs.forEach(s=>{
     let ph='';
-    s.pats.forEach(p=>{
+    s.pats.forEach((p,pi)=>{
+      const K=x=>s.id+':'+pi+':'+x;
       if(!t.length){
-        ph+=`<div class="pat"><b>${esc(p.name)}</b>（${p.nums.length}枚）<div style="background:var(--card);border-radius:6px;margin-top:4px">${p.nums.map((n,i)=>row(i,n)).join('')||'<div class="dots">カードなし</div>'}</div></div>`;
+        ph+=`<div class="pat"><b>${esc(p.name)}</b>（${p.nums.length}枚）<div style="background:var(--card);border-radius:6px;margin-top:4px">${p.nums.map((n,i)=>row(i,n,'','',K(i))).join('')||'<div class="dots">カードなし</div>'}</div></div>`;
         return;
       }
       const pos=findPos(p.nums,t,exLast);
@@ -207,7 +234,7 @@ function renderSeq(){
         let r='';
         if(from>0)r+='<div class="dots">⋮</div>';
         for(let x=from;x<to;x++){
-          r+=row(x,p.nums[x],x<end?(x>=i?'hit':''):(x===end?'nx':''),x===end?'次':'');
+          r+=row(x,p.nums[x],x<end?(x>=i?'hit':''):(x===end?'nx':''),x===end?'次':'',K(x));
         }
         if(to<p.nums.length)r+='<div class="dots">⋮</div>';
         const nx=p.nums[end];
@@ -220,12 +247,60 @@ function renderSeq(){
   $('qinfo').textContent=t.length?`入力 ${t.length}枚 → 一致 ${hits}件`:INFO;
 }
 
+// ---- 長押しで紫枠（押した場所だけ） ----
+let lp=null,lx=0,ly=0;
+(function(){
+  const sl=$('seqList');
+  sl.addEventListener('pointerdown',e=>{
+    const r=e.target.closest('.cr[data-k]');if(!r||!r.dataset.k)return;
+    lx=e.clientX;ly=e.clientY;clearTimeout(lp);
+    lp=setTimeout(()=>{lp=null;toggleMark(r.dataset.k,r.dataset.n)},550);
+  });
+  sl.addEventListener('pointermove',e=>{if(Math.abs(e.clientX-lx)>10||Math.abs(e.clientY-ly)>10)clearTimeout(lp)});
+  ['pointerup','pointercancel','pointerleave'].forEach(ev=>sl.addEventListener(ev,()=>clearTimeout(lp)));
+  sl.addEventListener('contextmenu',e=>{if(e.target.closest('.cr'))e.preventDefault()});
+})();
+function toggleMark(key,n){
+  if(!db.marks)db.marks={};
+  if(db.marks[key]===n){delete db.marks[key];toast('紫枠を外しました')}
+  else{db.marks[key]=n;toast(n+' に紫枠をつけました')}
+  save();renderSeq();
+}
+
+// ---- カード ----
 function renderCards(){
   const q=norm($('cq').value);
   const l=db.cards.filter(c=>!q||norm(c.name).includes(q)||keys(c.n).some(k=>k.includes(q)));
-  $('cardList').innerHTML=l.map(c=>`<div class="cr${frame(c.n)}"><span class="num">${esc(c.n)}</span><input value="${esc(c.name)}" placeholder="カード名" onchange="renameCard('${esc(c.n)}',this.value)" style="padding:5px 8px;font-size:13px"><button class="btn sm r" onclick="delCard('${esc(c.n)}')">×</button></div>`).join('')||'<div class="dots" style="padding:14px">カードがありません</div>';
+  $('cardList').innerHTML=l.map(c=>`<div class="cr${frame(c.n)}"><span class="num">${esc(c.n)}</span><span class="nm">${esc(c.name)||'（名前なし）'}</span><button class="btn sm" onclick="openCard('${esc(c.n)}')">編集</button><button class="btn sm r" onclick="delCard('${esc(c.n)}')">削除</button></div>`).join('')||'<div class="dots" style="padding:14px">カードがありません</div>';
 }
-function renameCard(n,v){const c=db.cards.find(c=>c.n===n);if(c){c.name=v.trim();save()}}
+function openCard(n){
+  const c=n&&db.cards.find(x=>x.n===n);
+  $('ecTitle').textContent=c?'カード編集':'カード追加';
+  $('ecOld').value=c?c.n:'';
+  $('ecNum').value=c?c.n:'';
+  $('ecName').value=c?c.name:'';
+  $('ecm').style.display='flex';
+}
+function closeCard(){$('ecm').style.display='none'}
+function saveCard(){
+  const old=$('ecOld').value,nn=norm($('ecNum').value),name=$('ecName').value.trim();
+  if(!nn){toast('カード番号を入力してください');return}
+  if(old){
+    const c=db.cards.find(x=>x.n===old);
+    if(!c){closeCard();return}
+    if(nn!==old){
+      if(db.cards.find(x=>x.n===nn)){toast('その番号は既に登録されています');return}
+      db.seqs.forEach(s=>s.pats.forEach(p=>{p.nums=p.nums.map(x=>x===old?nn:x)}));
+      Object.keys(db.marks).forEach(k=>{if(db.marks[k]===old)db.marks[k]=nn});
+      c.n=nn;
+    }
+    c.name=name;
+  }else{
+    const c=db.cards.find(x=>x.n===nn);
+    if(c)c.name=name||c.name;else db.cards.push({n:nn,name});
+  }
+  save();closeCard();renderCards();renderSeq();toast('保存しました');
+}
 function cmClose(){$('cm').style.display='none'}
 function ask(msg,cb,label){$('cmsg').textContent=msg;$('cok').textContent=label||'削除する';$('cok').onclick=()=>{cmClose();cb()};$('cm').style.display='flex'}
 function delCard(n){ask(n+' を削除しますか？（配列内の番号は残ります）',()=>{db.cards=db.cards.filter(c=>c.n!==n);save();renderCards();renderSeq()})}
@@ -259,7 +334,11 @@ function saveSeq(){
   if(i>=0)db.seqs[i]=d;else db.seqs.push(d);
   save();closeSeq();renderSeq();
 }
-function delSeq(sid){ask('この配列を削除しますか？',()=>{db.seqs=db.seqs.filter(s=>s.id!==sid);save();renderSeq()})}
+function delSeq(sid){ask('この配列を削除しますか？',()=>{
+  db.seqs=db.seqs.filter(s=>s.id!==sid);
+  Object.keys(db.marks).forEach(k=>{if(k.indexOf(sid+':')===0)delete db.marks[k]});
+  save();renderSeq();
+})}
 
 $('themeBtn').onclick=()=>{const d=document.body.dataset.theme==='dark';document.body.dataset.theme=d?'light':'dark';$('themeBtn').textContent=d?'ダーク':'ライト'};
 
