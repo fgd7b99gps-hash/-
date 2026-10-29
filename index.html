@@ -22,9 +22,16 @@ input,textarea{width:100%;padding:9px 11px;border:1px solid var(--bd);border-rad
 textarea{resize:vertical}
 #smemo{font-size:17px;font-weight:bold}
 .memo-t{font-size:16px;font-weight:bold}
-.btn{background:var(--pri);color:#fff;border:none;padding:8px 14px;border-radius:8px;font-weight:bold;font-size:13px;cursor:pointer}
+.btn{background:var(--pri);color:#fff;border:none;padding:8px 14px;border-radius:8px;font-weight:bold;font-size:13px;cursor:pointer;white-space:nowrap}
 .g{background:#757575}.r{background:#f44336}.sm{padding:4px 9px;font-size:12px}
 .row{display:flex;gap:6px;align-items:center}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
+.lbl{font-size:11px;color:var(--sub);margin-top:8px}
+.fb{padding:6px 12px;border:2px solid var(--bd);border-radius:16px;background:var(--card);color:var(--text);font-size:13px;font-weight:bold;cursor:pointer}
+.fb.on{background:var(--pri);border-color:var(--pri);color:#fff}
+.fb.pr{border-color:#2196f3}.fb.pr.on{background:#2196f3;color:#fff}
+.fb.st{border-color:#4caf50}.fb.st.on{background:#4caf50;color:#fff}
+.sc{background:var(--acc);border:1px solid var(--pri);color:var(--pri);border-radius:12px;padding:4px 10px;font-size:12px;font-weight:bold;cursor:pointer}
 .box{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:10px;margin-top:12px}
 .pat{background:var(--acc);border-radius:8px;padding:8px;margin-top:8px}
 .pat b{font-size:12px;color:var(--pri)}
@@ -61,7 +68,22 @@ textarea{resize:vertical}
 
 <div class="wrap">
   <div class="tab on" id="t0">
-    <div class="row"><input id="q" placeholder="出た番号を順に入力 例: 01 03 05（E1-01なら01でOK）" oninput="renderSeq()" autocomplete="off"><button class="btn g" onclick="clearQ()">消</button></div>
+    <div id="stepChips" class="chips"></div>
+    <div class="lbl">シリーズ</div>
+    <div id="serBtns" class="chips"></div>
+    <div class="lbl">種類</div>
+    <div class="chips">
+      <button class="fb pr" id="bPR" onclick="togType('pr')">PR</button>
+      <button class="fb st" id="bST" onclick="togType('st')">⭐</button>
+    </div>
+    <div class="row">
+      <input id="numIn" inputmode="numeric" placeholder="番号を入力 例: 17" oninput="onNum()" onkeydown="if(event.key==='Enter'){event.preventDefault();confirmStep()}" autocomplete="off">
+      <button class="btn" onclick="confirmStep()">確定</button>
+    </div>
+    <div class="row" style="margin-top:6px">
+      <button class="btn g sm" onclick="backStep()">1つ戻す</button>
+      <button class="btn g sm" onclick="clearQ()">全消し</button>
+    </div>
     <div class="info" id="qinfo"></div>
     <button class="btn" style="width:100%;margin-top:10px" onclick="openSeq()">＋ 新しい配列を登録</button>
     <div id="seqList"></div>
@@ -107,26 +129,88 @@ textarea{resize:vertical}
 <script>
 let db={cards:[],seqs:[],marks:{}}; // cards:[{n,name}] seqs:[{id,memo,pats:[{name,nums:[],total}]}] marks:{"配列ID:パターン番号:位置":カード番号}
 let editPats=[],tt=null;
+let steps=[];                                   // 確定した検索条件
+let cur={series:'',pr:false,st:false,num:''};   // 入力中の条件
 const $=i=>document.getElementById(i);
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 const norm=s=>String(s||'').normalize('NFKC').trim().toUpperCase();
 const toks=s=>norm(s).split(/[\s,、]+/).filter(Boolean);
 const nameOf=n=>{const c=db.cards.find(c=>c.n===n);return c?c.name:''};
-const INFO='番号をスペース区切りで順に入れると、一致する配列と「次のカード」が出ます。01だけでE1-01もヒット。番号のあとにスペースで確定。カードを長押しで、その場所だけ紫枠（共有URLにも入ります）。';
+const INFO='シリーズ・種類はボタン、番号は入力。「確定」を押すと次のカードの条件に進みます。カードを長押しで、その場所だけ紫枠（共有URLにも入ります）。';
 
 // ---- 枚数表記（7/100枚） ----
 function totalOf(p){const t=parseInt(p.total,10);return t>0?t:100}
 function cnt(p){return p.nums.length+'/'+totalOf(p)+'枚'}
 
-// ---- 広い検索（E1-01 を 01 や 1 でもヒット） ----
+// ---- カード番号を分解（E1-17PR → シリーズE1 / 番号17 / PR） ----
 const SUF=/(PR|[\u2B50\u2605\u2606]\uFE0F?)+$/u;
-function keys(n){
+function parse(n){
   const core=n.replace(SUF,'');
-  const tail=core.split('-').pop();
-  return [n,core,tail,tail.replace(/^0+/,''),n.replace(/-/g,''),core.replace(/-/g,'')].filter(Boolean);
+  const i=core.lastIndexOf('-');
+  let series,numStr;
+  if(i>=0){series=core.slice(0,i);numStr=core.slice(i+1)}
+  else{const m=core.match(/^(.*?)(\d+)$/);series=m?m[1]:core;numStr=m?m[2]:''}
+  return{series,num:/^\d+$/.test(numStr)?parseInt(numStr,10):null,pr:/PR/.test(n),st:/[\u2B50\u2605\u2606]/u.test(n)};
 }
-function tmatch(n,t,partial){
-  return keys(n).some(k=>partial?k.includes(t):k===t);
+
+// ---- 検索条件 ----
+const curEmpty=()=>!cur.series&&!cur.pr&&!cur.st&&!cur.num;
+function stepLabel(s){
+  if(s.exact)return s.exact;
+  return [s.series,s.num,s.pr?'PR':'',s.st?'⭐':''].filter(Boolean).join('·')||'—';
+}
+function stepMatch(n,s,partial){
+  if(s.exact)return n===s.exact;
+  const c=parse(n);
+  if(s.series&&c.series!==s.series)return false;
+  if(s.pr&&!c.pr)return false;
+  if(s.st&&!c.st)return false;
+  if(s.num){
+    if(c.num===null)return false;
+    if(partial){
+      const pad=String(c.num).padStart(2,'0'),a=String(c.num),ts=s.num.replace(/^0+/,'');
+      return pad.startsWith(s.num)||(ts!==''&&a.startsWith(ts));
+    }
+    return c.num===parseInt(s.num,10);
+  }
+  return true;
+}
+function qSteps(){
+  const a=steps.map(s=>Object.assign({},s,{live:false}));
+  if(!curEmpty())a.push(Object.assign({},cur,{live:true}));
+  return a;
+}
+function allSeries(){
+  const set={};
+  db.cards.forEach(c=>{const s=parse(c.n).series;if(s)set[s]=1});
+  return Object.keys(set).sort((a,b)=>a.localeCompare(b,'ja',{numeric:true}));
+}
+function renderQuery(){
+  $('stepChips').innerHTML=steps.map((s,i)=>`<span class="sc" onclick="rmStep(${i})">${i+1}. ${esc(stepLabel(s))} ×</span>`).join('');
+  const ser=allSeries();
+  $('serBtns').innerHTML=ser.length?ser.map(s=>`<button class="fb${cur.series===s?' on':''}" data-s="${esc(s)}" onclick="pickSeries(this.dataset.s)">${esc(s)}</button>`).join(''):'<span class="info">カードを登録するとシリーズが出ます</span>';
+  $('bPR').classList.toggle('on',cur.pr);
+  $('bST').classList.toggle('on',cur.st);
+}
+function resetCur(){cur={series:'',pr:false,st:false,num:''};$('numIn').value=''}
+function pickSeries(s){cur.series=cur.series===s?'':s;renderSeq()}
+function togType(k){cur[k]=!cur[k];renderSeq()}
+function onNum(){
+  cur.num=norm($('numIn').value).replace(/\D/g,'');
+  if($('numIn').value!==cur.num)$('numIn').value=cur.num;
+  renderSeq();
+}
+function confirmStep(){
+  if(curEmpty()){toast('ボタンを選ぶか番号を入力してください');return}
+  steps.push({series:cur.series,pr:cur.pr,st:cur.st,num:cur.num});
+  resetCur();renderSeq();
+}
+function backStep(){if(!curEmpty())resetCur();else steps.pop();renderSeq()}
+function rmStep(i){steps.splice(i,1);renderSeq()}
+function clearQ(){steps=[];resetCur();renderSeq()}
+function addNext(prev,n){
+  if(!curEmpty()){if(prev)steps.push({exact:prev});resetCur()}
+  steps.push({exact:n});renderSeq();
 }
 
 // ---- 枠（PR=青 / ⭐=緑 / 長押し=紫：押した場所だけ） ----
@@ -147,12 +231,10 @@ function load(){
     if(d&&d.cards){
       db=d;
       if(!db.marks)db.marks={};
-      // 旧仕様（カード単位）の紫枠は破棄
       Object.keys(db.marks).forEach(k=>{if(k.indexOf(':')<0)delete db.marks[k]});
       return;
     }
   }catch(e){}
-  // 旧データから移行（画像は使いません）
   try{
     const o=JSON.parse(localStorage.getItem('aikatsu_db'));
     if(o&&o.cards){
@@ -217,20 +299,17 @@ async function initShared(){
 
 // ---- 表示 ----
 function tab(i){document.querySelectorAll('nav button').forEach((b,k)=>b.classList.toggle('on',k===i));document.querySelectorAll('.tab').forEach((t,k)=>t.classList.toggle('on',k===i));i?renderCards():renderSeq()}
-function clearQ(){$('q').value='';renderSeq()}
-function addToQ(n){const q=$('q');q.value=(q.value.trim()+' '+n).trim()+' ';renderSeq();q.focus()}
 
 function row(i,n,cls,tag,key){
   return `<div class="cr ${cls||''}${frame(n,key)}" data-n="${esc(n)}" data-k="${esc(key||'')}"><span class="ix">${i+1}</span><span class="num">${esc(n)}</span><span class="nm">${esc(nameOf(n))}</span>${tag?`<span class="tag">${tag}</span>`:''}</div>`;
 }
 
-function findPos(nums,t,exLast){
+function findPos(nums,t){
   const k=t.length,res=[];
   for(let i=0;i+k<=nums.length;i++){
     let ok=true;
     for(let j=0;j<k;j++){
-      const partial=(j===k-1)&&!exLast;
-      if(!tmatch(nums[i+j],t[j],partial)){ok=false;break}
+      if(!stepMatch(nums[i+j],t[j],t[j].live)){ok=false;break}
     }
     if(ok)res.push(i);
   }
@@ -238,9 +317,9 @@ function findPos(nums,t,exLast){
 }
 
 function renderSeq(){
-  const raw=$('q').value;
-  const t=toks(raw),box=$('seqList');
-  const exLast=/\s$/.test(raw);
+  renderQuery();
+  const t=qSteps(),box=$('seqList');
+  const live=t.length>0&&t[t.length-1].live;
   let h='',hits=0;
   db.seqs.forEach(s=>{
     let ph='';
@@ -250,7 +329,7 @@ function renderSeq(){
         ph+=`<div class="pat"><b>${esc(p.name)}</b>（${cnt(p)}）<div style="background:var(--card);border-radius:6px;margin-top:4px">${p.nums.map((n,i)=>row(i,n,'','',K(i))).join('')||'<div class="dots">カードなし</div>'}</div></div>`;
         return;
       }
-      const pos=findPos(p.nums,t,exLast);
+      const pos=findPos(p.nums,t);
       pos.forEach(i=>{
         hits++;
         const k=t.length,end=i+k,from=Math.max(0,i-2),to=Math.min(p.nums.length,end+6);
@@ -261,13 +340,14 @@ function renderSeq(){
         }
         if(to<p.nums.length)r+='<div class="dots">⋮</div>';
         const nx=p.nums[end];
-        ph+=`<div class="pat"><b>${esc(p.name)}</b>（${end}枚目まで一致 / ${cnt(p)}）<div style="background:var(--card);border-radius:6px;margin-top:4px">${r}</div>${nx?`<button class="btn sm" style="margin-top:6px" onclick="addToQ('${esc(nx)}')">次が出た：${esc(nx)} を追加</button>`:'<div class="info">この配列はここで終わりです</div>'}</div>`;
+        const prev=live?p.nums[end-1]:'';
+        ph+=`<div class="pat"><b>${esc(p.name)}</b>（${end}枚目まで一致 / ${cnt(p)}）<div style="background:var(--card);border-radius:6px;margin-top:4px">${r}</div>${nx?`<button class="btn sm" style="margin-top:6px" data-p="${esc(prev)}" data-n="${esc(nx)}" onclick="addNext(this.dataset.p,this.dataset.n)">次が出た：${esc(nx)} を追加</button>`:'<div class="info">この配列はここで終わりです</div>'}</div>`;
       });
     });
     if(ph)h+=`<div class="box"><div class="row" style="justify-content:space-between"><strong class="memo-t">${esc(s.memo)||'排出配列メモ'}</strong><span style="white-space:nowrap"><button class="btn sm" onclick="openSeq('${s.id}')">編集</button> <button class="btn sm r" onclick="delSeq('${s.id}')">削除</button></span></div>${ph}</div>`;
   });
   box.innerHTML=h||(t.length?'<div class="info" style="text-align:center;margin-top:16px">一致する配列はありません</div>':'<div class="info" style="text-align:center;margin-top:16px">配列が未登録です</div>');
-  $('qinfo').textContent=t.length?`入力 ${t.length}枚 → 一致 ${hits}件`:INFO;
+  $('qinfo').textContent=t.length?`条件 ${t.length}枚${live?'（最後は入力中）':''} → 一致 ${hits}件`:INFO;
 }
 
 // ---- 長押しで紫枠（押した場所だけ） ----
@@ -293,7 +373,7 @@ function toggleMark(key,n){
 // ---- カード ----
 function renderCards(){
   const q=norm($('cq').value);
-  const l=db.cards.filter(c=>!q||norm(c.name).includes(q)||keys(c.n).some(k=>k.includes(q)));
+  const l=db.cards.filter(c=>!q||norm(c.n).includes(q)||norm(c.name).includes(q));
   $('cardList').innerHTML=l.map(c=>`<div class="cr${frame(c.n)}"><span class="num">${esc(c.n)}</span><span class="nm">${esc(c.name)||'（名前なし）'}</span><button class="btn sm" onclick="openCard('${esc(c.n)}')">編集</button><button class="btn sm r" onclick="delCard('${esc(c.n)}')">削除</button></div>`).join('')||'<div class="dots" style="padding:14px">カードがありません</div>';
 }
 function openCard(n){
@@ -315,6 +395,7 @@ function saveCard(){
       if(db.cards.find(x=>x.n===nn)){toast('その番号は既に登録されています');return}
       db.seqs.forEach(s=>s.pats.forEach(p=>{p.nums=p.nums.map(x=>x===old?nn:x)}));
       Object.keys(db.marks).forEach(k=>{if(db.marks[k]===old)db.marks[k]=nn});
+      steps.forEach(s=>{if(s.exact===old)s.exact=nn});
       c.n=nn;
     }
     c.name=name;
@@ -333,7 +414,7 @@ function bulkAdd(){
     const n=norm(m[1]),c=db.cards.find(c=>c.n===n);
     if(c){if(m[2])c.name=m[2]}else db.cards.push({n,name:m[2]||''});
   });
-  $('bulk').value='';save();renderCards();toast('追加しました');
+  $('bulk').value='';save();renderCards();renderSeq();toast('追加しました');
 }
 
 // ---- 配列編集 ----
