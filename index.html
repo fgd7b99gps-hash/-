@@ -77,7 +77,7 @@ textarea{resize:vertical}
       <button class="fb st" id="bST" onclick="togType('st')">⭐</button>
     </div>
     <div class="row">
-      <input id="numIn" inputmode="numeric" placeholder="番号を入力 例: 17" oninput="onNum()" onkeydown="if(event.key==='Enter'){event.preventDefault();confirmStep()}" autocomplete="off">
+      <input id="numIn" placeholder="番号を入力 例: 17 28 19（スペースで確定）" oninput="onNum()" onkeydown="if(event.key==='Enter'){event.preventDefault();confirmStep()}" autocomplete="off">
       <button class="btn" onclick="confirmStep()">確定</button>
     </div>
     <div class="row" style="margin-top:6px">
@@ -136,7 +136,7 @@ const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;'
 const norm=s=>String(s||'').normalize('NFKC').trim().toUpperCase();
 const toks=s=>norm(s).split(/[\s,、]+/).filter(Boolean);
 const nameOf=n=>{const c=db.cards.find(c=>c.n===n);return c?c.name:''};
-const INFO='シリーズ・種類はボタン、番号は入力。「確定」を押すと次のカードの条件に進みます。カードを長押しで、その場所だけ紫枠（共有URLにも入ります）。';
+const INFO='シリーズ・種類はボタン、番号は入力。「17 28 19」のようにスペースで区切ると1枚ずつ確定されます。カードを長押しで、その場所だけ紫枠（共有URLにも入ります）。';
 
 // ---- 枚数表記（7/100枚） ----
 function totalOf(p){const t=parseInt(p.total,10);return t>0?t:100}
@@ -195,9 +195,15 @@ function renderQuery(){
 function resetCur(){cur={series:'',pr:false,st:false,num:''};$('numIn').value=''}
 function pickSeries(s){cur.series=cur.series===s?'':s;renderSeq()}
 function togType(k){cur[k]=!cur[k];renderSeq()}
+
+// 番号欄：スペース（改行・カンマ）で自動確定。最後の1つは入力中
 function onNum(){
-  cur.num=norm($('numIn').value).replace(/\D/g,'');
-  if($('numIn').value!==cur.num)$('numIn').value=cur.num;
+  const v=norm($('numIn').value).replace(/[^\d\s,、]/g,'');
+  const parts=v.split(/[\s,、]+/);
+  const last=/[\s,、]$/.test(v)?'':parts.pop();
+  parts.filter(Boolean).forEach(p=>steps.push({series:cur.series,pr:cur.pr,st:cur.st,num:p}));
+  cur.num=last;
+  $('numIn').value=last;
   renderSeq();
 }
 function confirmStep(){
@@ -253,8 +259,17 @@ const pipe=async(b,t)=>new Uint8Array(await new Response(new Blob([b]).stream().
 async function pack(str){const r=new TextEncoder().encode(str);return window.CompressionStream?'z'+b64(await pipe(r,new CompressionStream('deflate-raw'))):'j'+b64(r)}
 async function unpack(s){const b=unb64(s.slice(1));return new TextDecoder().decode(s[0]==='z'?await pipe(b,new DecompressionStream('deflate-raw')):b)}
 
-// ---- 共有（紫枠の位置・総枚数も入れる） ----
+// ---- 共有（コピー失敗時は別の方法で順に試す） ----
+function legacyCopy(t){
+  const a=document.createElement('textarea');
+  a.value=t;a.style.cssText='position:fixed;top:0;left:0;opacity:0';
+  document.body.appendChild(a);a.focus();a.select();a.setSelectionRange(0,t.length);
+  let ok=false;try{ok=document.execCommand('copy')}catch(e){}
+  a.remove();return ok;
+}
+
 async function share(){
+  let url='';
   try{
     const names={};db.cards.forEach(c=>{if(c.name)names[c.n]=c.name});
     const data={v:4,c:Object.entries(names),s:db.seqs.map(s=>[s.memo,s.pats.map((p,pi)=>{
@@ -266,10 +281,17 @@ async function share(){
       if(tot!==100)r.push(tot);
       return r;
     })])};
-    const url=location.href.split(/[?#]/)[0]+'?s='+await pack(JSON.stringify(data));
-    if(navigator.clipboard&&navigator.clipboard.writeText){await navigator.clipboard.writeText(url);toast('URLをコピー（'+url.length+'文字）')}
-    else prompt('コピーしてください',url);
-  }catch(e){toast('URL作成に失敗しました')}
+    url=location.href.split(/[?#]/)[0]+'?s='+await pack(JSON.stringify(data));
+  }catch(e){
+    console.error(e);toast('URL作成に失敗しました');return;
+  }
+  const done=()=>toast('URLをコピー（'+url.length+'文字）');
+  try{await navigator.clipboard.writeText(url);done();return}catch(e){}
+  if(legacyCopy(url)){done();return}
+  try{
+    if(navigator.share){await navigator.share({url});return}
+  }catch(e){if(e&&e.name==='AbortError')return}
+  prompt('コピーしてください',url);
 }
 
 async function initShared(){
