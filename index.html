@@ -408,7 +408,7 @@ function normalBody(s,t,live){
   return{h,hits};
 }
 
-// ---- 配列内検索（その配列の中だけ絞り込む） ----
+// ---- 配列内検索（最初に当たったカードから最後まで全部出す） ----
 function inMatch(pos,q){
   return pos.split('|').some(c=>{
     if(/^\d+$/.test(q)){
@@ -422,10 +422,17 @@ function inMatch(pos,q){
 function inSeqBody(s,q){
   let h='',tot=0;
   s.pats.forEach((p,pi)=>{
-    const ms=[];p.nums.forEach((n,i)=>{if(inMatch(n,q))ms.push(i)});
-    if(!ms.length)return;
-    tot+=ms.length;
-    h+=`<div class="pat">${patHead(s,p)}<div class="lst">${ms.map(i=>row(i,p.nums[i],'hit','',s.id+':'+pi+':'+i)).join('')}</div></div>`;
+    const ms={};let first=-1;
+    p.nums.forEach((n,i)=>{
+      if(inMatch(n,q)){ms[i]=1;tot++;if(first<0)first=i}
+    });
+    if(first<0)return;
+    let r='';
+    if(first>0)r+='<div class="dots">⋮</div>';
+    for(let x=first;x<p.nums.length;x++){
+      r+=row(x,p.nums[x],ms[x]?'hit':'','',s.id+':'+pi+':'+x);
+    }
+    h+=`<div class="pat">${patHead(s,p)}<div class="lst">${r}</div></div>`;
   });
   return `<div class="info">「${esc(q)}」に該当 ${tot}件</div>`+h;
 }
