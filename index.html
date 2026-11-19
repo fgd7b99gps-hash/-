@@ -387,13 +387,13 @@ function normalBody(s,t,live){
     }
     findPos(p.nums,t).forEach(i=>{
       hits++;
-      const k=t.length,end=i+k,from=Math.max(0,i-2),to=Math.min(p.nums.length,end+6);
+      // 一致した位置から配列の最後まで全部出す（前は出さない）
+      const k=t.length,end=i+k,from=i,to=p.nums.length;
       let r='';
       if(from>0)r+='<div class="dots">⋮</div>';
       for(let x=from;x<to;x++){
-        r+=row(x,p.nums[x],x<end?(x>=i?'hit':''):(x===end?'nx':''),x===end?'次':'',K(x));
+        r+=row(x,p.nums[x],x<end?'hit':(x===end?'nx':''),x===end?'次':'',K(x));
       }
-      if(to<p.nums.length)r+='<div class="dots">⋮</div>';
       const nx=p.nums[end];
       const prev=live?p.nums[end-1]:'';
       const btns=nx?nx.split('|').map(c=>`<button class="btn sm" style="margin:6px 6px 0 0" data-p="${esc(prev)}" data-n="${esc(c)}" onclick="addNext(this.dataset.p,this.dataset.n)">次が出た：${esc(c)} を追加</button>`).join(''):'<div class="info">この配列はここで終わりです</div>';
