@@ -66,6 +66,11 @@ textarea{resize:vertical}
 .modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;justify-content:center;align-items:center;padding:12px}
 .mc{background:var(--card);width:100%;max-width:500px;border-radius:12px;padding:16px;max-height:92vh;overflow-y:auto}
 .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.85);color:#fff;padding:9px 18px;border-radius:20px;font-size:13px;z-index:1000;display:none}
+/* 配列は横スワイプ、中のカードは縦スクロール */
+#seqList{display:flex;gap:10px;overflow-x:auto;scroll-snap-type:x mandatory;align-items:flex-start;padding-bottom:8px;-webkit-overflow-scrolling:touch}
+#seqList>.box{flex:0 0 92%;max-width:560px;max-height:78vh;overflow-y:auto;scroll-snap-align:start}
+#seqList>.info{flex:0 0 100%}
+#seqList>.box>.row:first-child{position:sticky;top:0;background:var(--card);z-index:2;padding-bottom:6px}
 </style>
 </head>
 <body data-theme="light">
@@ -152,7 +157,7 @@ const toks=s=>norm(s).split(/[\s,、]+/).filter(Boolean);
 // 位置の入力：スペース区切り＝位置、「/」「+」「|」＝同じ位置に複数カード
 const posToks=s=>toks(s).map(t=>t.split(/[|\/+]/).filter(Boolean).join('|')).filter(Boolean);
 const nameOf=n=>{const c=db.cards.find(c=>c.n===n);return c?c.name:''};
-const INFO='配列の名前・番号、カード番号、各配列の中のカードで絞り込めます。シリーズ・種類はボタン、番号は「17 28 19」のようにスペース区切り。カードを長押しで、その場所だけ紫枠。';
+const INFO='配列の名前・番号、カード番号、各配列の中のカードで絞り込めます。配列は左右にスワイプで切り替え。シリーズ・種類はボタン、番号は「17 28 19」のようにスペース区切り。カードを長押しで、その場所だけ紫枠。';
 
 function totalOf(p){const t=parseInt(p.total,10);return t>0?t:100}
 function cnt(p){return p.nums.length+'/'+totalOf(p)+'枚'}
